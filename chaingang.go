@@ -3,26 +3,35 @@ package main
 import (
 	"fmt"
 	"os"
+	"github.com/toorop/go-bittrex"
 )
 
 func main() {
-	var bitterexKey, coinbaseKey string
-	const maxArguments = 2
+	var bittrexKey, coinbaseKey, bittrexSecret string
+	const maxArguments = 3
 	fmt.Printf("chaingang running\n")
 		for i := 1; i < len(os.Args); i += 2 {
-			if(len(os.Args) >= i + 1){
-				if(os.Args[i] == "-b"){
-					bitterexKey = os.Args[i + 1]
-				} else if(os.Args[i] == "-c"){
+			switch os.Args[i]{
+				case "-b":
+					bittrexKey = os.Args[i + 1]
+				case "-c":
 					coinbaseKey = os.Args[i + 1]
-				}
+			  case "-s":
+					bittrexSecret = os.Args[i + 1]
+				default:
+					panic("unrecognized argument")
 			}
 		}
 
-	fmt.Printf("\tbitterexKey: %v\n", bitterexKey)
+	fmt.Printf("\tbittrexKey: %v\n", bittrexKey)
+	fmt.Printf("\tbittrexSecret: %v\n", bittrexSecret)
 	fmt.Printf("\tcoinbaseKey: %v\n", coinbaseKey)
 
-	if(bitterexKey != ""){
-		fmt.Printf("time to call api\n")
+	if(bittrexKey != "" && bittrexSecret != ""){
+		bittrex := bittrex.New(bittrexKey, bittrexSecret)
+		markets, err := bittrex.GetMarkets()
+		fmt.Println(err, markets)
+	} else {
+		fmt.Printf("please provide bittrex key and secret")
 	}
 }
