@@ -90,6 +90,7 @@ func printCoinValues(parentCoins map[string]*parentCoin, childCoins map[string]*
 		}
 
 	}
+	fmt.Println("-------------------------------------------------------------")
 }
 
 func main() {
