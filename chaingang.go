@@ -81,11 +81,11 @@ func printCoinValues(parentCoins map[string]*parentCoin, childCoins map[string]*
 			fmt.Printf("\t\t\tETH : %v\n", childCoinValue.ETH)
 			fmt.Println()
 			if childCoinValue.BTC.GreaterThan(childCoinValue.ETH) {
-				fmt.Printf("\t\t\tDELTA: %v\n", childCoinValue.BTC.Add(childCoinValue.ETH.Neg()))
-				fmt.Printf("\t\t\tBUY: ETH : %v\n", childCoinValue.BTC.Div(childCoinValue.ETH))
+				fmt.Printf("\t\t\tPER TRAN: $%v\n", childCoinValue.BTC.Add(childCoinValue.ETH.Neg()))
+				fmt.Printf("\t\t\tBUY ETH : +%v%%\n", childCoinValue.BTC.Div(childCoinValue.ETH).Add(decimal.NewFromFloat(1).Neg()).Round(2).Mul(decimal.NewFromFloat(100)))
 			} else if childCoinValue.ETH.GreaterThan(childCoinValue.BTC) {
-				fmt.Printf("\t\t\tDELTA: %v\n", childCoinValue.ETH.Add(childCoinValue.BTC.Neg()))
-				fmt.Printf("\t\t\tBUY BTC FOR Free: %v\n", childCoinValue.ETH.Div(childCoinValue.BTC).Add(decimal.NewFromFloat(1).Neg()))
+				fmt.Printf("\t\t\tPER TRAN: $%v\n", childCoinValue.ETH.Add(childCoinValue.BTC.Neg()))
+				fmt.Printf("\t\t\tBUY BTC : +%v%%\n", childCoinValue.ETH.Div(childCoinValue.BTC).Add(decimal.NewFromFloat(1).Neg()).Round(2).Mul(decimal.NewFromFloat(100)))
 			}
 		}
 
