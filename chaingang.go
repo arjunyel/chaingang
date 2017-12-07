@@ -15,15 +15,79 @@ func updateMarketSummaries(bittrexClient *bittrex.Bittrex) ([]bittrex.MarketSumm
 	return marketSummaries, err
 }
 
-func processMarketSummaries(parentCoins map[string]parentCoin, marketSummaries []bittrex.MarketSummary) {
+func populateCoins(parentCoins map[string]*parentCoin, childCoins map[string]*childCoin, marketSummaries []bittrex.MarketSummary) {
 	for _, marketSummary := range marketSummaries {
 
-		newChildCoin := childCoin{
-			Name:          strings.Split(marketSummary.MarketName, "-")[1],
-			MarketSummary: marketSummary,
+		newParentCoinName := strings.Split(marketSummary.MarketName, "-")[0]
+		newChildCoinName := strings.Split(marketSummary.MarketName, "-")[1]
+		//calculate nonUSDT
+		if _, childIsParent := parentCoins[newChildCoinName]; childIsParent {
+			switch newParentCoinName {
+			case "BTC":
+				parentCoins[newChildCoinName].BTC = marketSummary.Last
+			case "ETH":
+				parentCoins[newChildCoinName].ETH = marketSummary.Last
+			case "USDT":
+				parentCoins[newChildCoinName].USDT = marketSummary.Last
+			default:
+				fmt.Printf("Warning : No support for parent coin : %v", newParentCoinName)
+			}
 		}
 
-		parentCoins[strings.Split(marketSummary.MarketName, "-")[0]].ChildCoins[newChildCoin.Name] = newChildCoin
+		if _, newChildCoinExists := childCoins[newChildCoinName]; !newChildCoinExists {
+			childCoins[newChildCoinName] = &childCoin{
+				Name:          newChildCoinName,
+				MarketSummary: marketSummary,
+				ParentCoins:   make([]string, 0),
+			}
+		}
+		switch newParentCoinName {
+		case "BTC":
+			childCoins[newChildCoinName].BTC = marketSummary.Last
+		case "ETH":
+			childCoins[newChildCoinName].ETH = marketSummary.Last
+		case "USDT":
+			childCoins[newChildCoinName].USDT = marketSummary.Last
+		default:
+			fmt.Printf("Warning : No support for parent coin : %v", newParentCoinName)
+		}
+		childCoins[newChildCoinName].ParentCoins = append(childCoins[newChildCoinName].ParentCoins, newParentCoinName)
+		parentCoins[newParentCoinName].ChildCoins = append(parentCoins[newParentCoinName].ChildCoins, newChildCoinName)
+
+	}
+
+}
+
+func calculateCoinValues(parentCoins map[string]*parentCoin, childCoins map[string]*childCoin) {
+	for parentCoinName, parentCoinValue := range parentCoins {
+
+		for _, childCoinName := range parentCoinValue.ChildCoins {
+			switch parentCoinName {
+			case "BTC":
+				childCoins[childCoinName].BTC = parentCoinValue.USDT.Mul(childCoins[childCoinName].BTC)
+			case "ETH":
+				childCoins[childCoinName].ETH = parentCoinValue.USDT.Mul(childCoins[childCoinName].ETH)
+			}
+		}
+	}
+}
+
+func printCoinValues(parentCoins map[string]*parentCoin, childCoins map[string]*childCoin) {
+	for childCoinName, childCoinValue := range childCoins {
+		_, childIsParent := parentCoins[childCoinName]
+		if len(childCoinValue.ParentCoins) == 2 && !childIsParent {
+			fmt.Printf("\t\t%v:\n", childCoinName)
+			fmt.Printf("\t\t\tBTC : %v\n", childCoinValue.BTC)
+			fmt.Printf("\t\t\tETH : %v\n", childCoinValue.ETH)
+			fmt.Println()
+			if childCoinValue.BTC.GreaterThan(childCoinValue.ETH) {
+				fmt.Printf("\t\t\tDELTA: %v\n", childCoinValue.BTC.Add(childCoinValue.ETH.Neg()))
+				fmt.Printf("\t\t\tBUY: ETH : %v\n", childCoinValue.BTC.Div(childCoinValue.ETH))
+			} else if childCoinValue.ETH.GreaterThan(childCoinValue.BTC) {
+				fmt.Printf("\t\t\tDELTA: %v\n", childCoinValue.ETH.Add(childCoinValue.BTC.Neg()))
+				fmt.Printf("\t\t\tBUY BTC FOR Free: %v\n", childCoinValue.ETH.Div(childCoinValue.BTC).Add(decimal.NewFromFloat(1).Neg()))
+			}
+		}
 
 	}
 }
@@ -52,39 +116,23 @@ func main() {
 
 	if bittrexKey != "" && bittrexSecret != "" {
 		bittrexClient := bittrex.New(bittrexKey, bittrexSecret)
-		parentCoins := make(map[string]parentCoin)
+		parentCoins := make(map[string]*parentCoin)
+		childCoins := make(map[string]*childCoin)
 
 		//populateParentCoin
-		for _, coinName := range parentCoinNames {
-			parentCoinName := strings.Split(coinName, "-")[0]
-			var UsdValue decimal.Decimal
-			switch parentCoinName {
-			case "BTC":
-				UsdValue = decimal.NewFromFloat(11538.90)
-			case "ETH":
-				UsdValue = decimal.NewFromFloat(464.54)
-			case "USDT":
-				UsdValue = decimal.NewFromFloat(.99)
-			}
-			parentCoins[coinName] = parentCoin{
-				Name:       coinName,
-				USD:        UsdValue,
-				ChildCoins: make(map[string]childCoin),
+		for _, parentCoinName := range parentCoinNames {
+
+			parentCoins[parentCoinName] = &parentCoin{
+				Name: parentCoinName,
 			}
 		}
 
 		for {
 			marketSummaries, err := updateMarketSummaries(bittrexClient)
 			go func() {
-				processMarketSummaries(parentCoins, marketSummaries)
-
-				for _, pCoin := range parentCoins {
-					fmt.Println(pCoin.Name)
-					for _, cCoin := range pCoin.ChildCoins {
-						fmt.Printf("\t%v : %v\n", cCoin.Name, cCoin.MarketSummary.Last.Mul(pCoin.USD))
-					}
-				}
-
+				populateCoins(parentCoins, childCoins, marketSummaries)
+				calculateCoinValues(parentCoins, childCoins)
+				printCoinValues(parentCoins, childCoins)
 			}()
 			if err == nil {
 
@@ -105,11 +153,17 @@ type marketRecord struct {
 
 type parentCoin struct {
 	Name       string
-	USD        decimal.Decimal
-	ChildCoins map[string]childCoin
+	BTC        decimal.Decimal
+	ETH        decimal.Decimal
+	USDT       decimal.Decimal
+	ChildCoins []string
 }
 
 type childCoin struct {
 	Name          string
 	MarketSummary bittrex.MarketSummary
+	BTC           decimal.Decimal
+	ETH           decimal.Decimal
+	USDT          decimal.Decimal
+	ParentCoins   []string
 }
