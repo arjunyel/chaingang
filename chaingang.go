@@ -10,12 +10,15 @@ import (
 	"github.com/toorop/go-bittrex"
 )
 
+var parentCoins = map[string]*parentCoin{}
+var childCoins = map[string]*childCoin{}
+
 func updateMarketSummaries(bittrexClient *bittrex.Bittrex) ([]bittrex.MarketSummary, error) {
 	marketSummaries, err := bittrexClient.GetMarketSummaries()
 	return marketSummaries, err
 }
 
-func populateCoins(parentCoins map[string]*parentCoin, childCoins map[string]*childCoin, marketSummaries []bittrex.MarketSummary) {
+func populateCoins(marketSummaries []bittrex.MarketSummary) {
 	for _, marketSummary := range marketSummaries {
 
 		newParentCoinName := strings.Split(marketSummary.MarketName, "-")[0]
@@ -58,7 +61,7 @@ func populateCoins(parentCoins map[string]*parentCoin, childCoins map[string]*ch
 
 }
 
-func calculateCoinValues(parentCoins map[string]*parentCoin, childCoins map[string]*childCoin) {
+func calculateCoinValues() {
 	for parentCoinName, parentCoinValue := range parentCoins {
 
 		for _, childCoinName := range parentCoinValue.ChildCoins {
@@ -72,7 +75,7 @@ func calculateCoinValues(parentCoins map[string]*parentCoin, childCoins map[stri
 	}
 }
 
-func printCoinValues(parentCoins map[string]*parentCoin, childCoins map[string]*childCoin) {
+func printCoinValues() {
 	for childCoinName, childCoinValue := range childCoins {
 		_, childIsParent := parentCoins[childCoinName]
 		if len(childCoinValue.ParentCoins) == 2 && !childIsParent {
@@ -117,8 +120,6 @@ func main() {
 
 	if bittrexKey != "" && bittrexSecret != "" {
 		bittrexClient := bittrex.New(bittrexKey, bittrexSecret)
-		parentCoins := make(map[string]*parentCoin)
-		childCoins := make(map[string]*childCoin)
 
 		//populateParentCoin
 		for _, parentCoinName := range parentCoinNames {
@@ -131,9 +132,9 @@ func main() {
 		for {
 			marketSummaries, err := updateMarketSummaries(bittrexClient)
 			go func() {
-				populateCoins(parentCoins, childCoins, marketSummaries)
-				calculateCoinValues(parentCoins, childCoins)
-				printCoinValues(parentCoins, childCoins)
+				populateCoins(marketSummaries)
+				calculateCoinValues()
+				printCoinValues()
 			}()
 			if err == nil {
 
