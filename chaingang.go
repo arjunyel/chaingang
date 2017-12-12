@@ -82,14 +82,21 @@ func printCoinValues() {
 	for childCoinName, childCoinValue := range childCoins {
 		_, childIsParent := parentCoins[childCoinName]
 		if len(childCoinValue.ParentCoins) == 2 && !childIsParent {
-			fmt.Printf("\t\t%v:\n", childCoinName)
-			fmt.Printf("\t\t\tBTC : %v\n", childCoinValue.Btc)
-			fmt.Printf("\t\t\tETH : %v\n", childCoinValue.Eth)
+			fmt.Printf("%v:\n", childCoinName)
+			fmt.Printf("\tBTC : %v\n", childCoinValue.Btc)
+			fmt.Printf("\tETH : %v\n", childCoinValue.Eth)
 			fmt.Println()
 		}
 
 	}
 	fmt.Println("-------------------------------------------------------------")
+	for parentCoinName, parentCoinValue := range parentCoins {
+		fmt.Printf("%v:\n", parentCoinName)
+		fmt.Printf("\tBTC : %v\n", parentCoinValue.Btc)
+		fmt.Printf("\tETH : %v\n", parentCoinValue.Eth)
+		fmt.Printf("\tUSDT: %v\n", parentCoinValue.Usdt)
+
+	}
 }
 
 func main() {
