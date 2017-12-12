@@ -78,6 +78,40 @@ func populateCoins(marketSummaries []bittrex.MarketSummary) {
 	}
 }
 
+func convert(inputCoinName string, outputCoinName string) decimal.Decimal {
+	output := decimal.NewFromFloat(0)
+
+	_, inputIsParentCoin := parentCoins[inputCoinName]
+	_, outputIsParentCoin := parentCoins[outputCoinName]
+
+	if inputIsParentCoin && !outputIsParentCoin {
+		switch inputCoinName {
+		case "BTC":
+			output = childCoins[outputCoinName].Btc
+		case "ETH":
+			output = childCoins[outputCoinName].Eth
+		}
+	} else if inputIsParentCoin && outputIsParentCoin {
+		switch inputCoinName {
+		case "BTC":
+			output = parentCoins[outputCoinName].Btc
+		case "ETH":
+			output = parentCoins[outputCoinName].Eth
+		case "USDT":
+			output = parentCoins[outputCoinName].Usdt
+		}
+	} else if !inputIsParentCoin && outputIsParentCoin {
+		switch outputCoinName {
+		case "BTC":
+			output = childCoins[inputCoinName].Btc
+		case "ETH":
+			output = childCoins[inputCoinName].Eth
+		}
+	}
+
+	return output
+}
+
 func printCoinValues() {
 	for childCoinName, childCoinValue := range childCoins {
 		_, childIsParent := parentCoins[childCoinName]
@@ -136,7 +170,6 @@ func main() {
 			marketSummaries, err := updateMarketSummaries(bittrexClient)
 			go func() {
 				populateCoins(marketSummaries)
-				//calculateCoinValues()
 				printCoinValues()
 			}()
 			if err == nil {
