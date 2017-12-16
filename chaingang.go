@@ -92,13 +92,13 @@ func convert(inputCoinName string, outputCoinName string) decimal.Decimal {
 			output = childCoins[outputCoinName].Eth
 		}
 	} else if inputIsParentCoin && outputIsParentCoin {
-		switch inputCoinName {
+		switch outputCoinName {
 		case "BTC":
-			output = parentCoins[outputCoinName].Btc
+			output = parentCoins[inputCoinName].Btc
 		case "ETH":
-			output = parentCoins[outputCoinName].Eth
+			output = parentCoins[inputCoinName].Eth
 		case "USDT":
-			output = parentCoins[outputCoinName].Usdt
+			output = parentCoins[inputCoinName].Usdt
 		}
 	} else if !inputIsParentCoin && outputIsParentCoin {
 		switch outputCoinName {
@@ -122,6 +122,14 @@ func printCoinValues() {
 			fmt.Printf("\tBTC : %v\n", directToBtc)
 			fmt.Printf("\tETH : %v\n", directToEth)
 			fmt.Println()
+			fmt.Printf("\t%v -> BTC -> USD : %v\n",childCoinName,directToBtc.Mul(convert("BTC","USDT")))
+			fmt.Printf("\t%v -> ETH -> USD : %v\n",childCoinName,directToEth.Mul(convert("ETH","USDT")))
+			fmt.Println()
+			fmt.Printf("\tBTC -> %v -> ETH -> USD: %v\n", childCoinName, convert("BTC", childCoinName).Mul(convert(childCoinName, "ETH")).Mul(convert("ETH", "USDT")))
+			fmt.Printf("\tBTC -> ETH -> USDT     : %v\n", convert("BTC", "ETH").Mul(convert("ETH", "USDT")))
+			fmt.Println()
+			fmt.Printf("\tETH -> %v -> BTC -> USD: %v\n", childCoinName, convert("ETH", childCoinName).Mul(convert(childCoinName, "BTC")).Mul(convert("BTC", "USDT")))
+			fmt.Printf("\tBTC -> ETH -> USDT     : %v\n", convert("ETH", "BTC").Mul(convert("BTC", "USDT")))
 		}
 
 	}
