@@ -112,49 +112,52 @@ func convert(inputCoinName string, outputCoinName string) decimal.Decimal {
 	return output
 }
 
-func printCoinValues() {
+func populateCoinSummary() {
 	for childCoinName, childCoinValue := range childCoins {
 		_, childIsParent := parentCoins[childCoinName]
 		if len(childCoinValue.ParentCoins) == 2 && !childIsParent {
-			fmt.Printf("%v:\n", childCoinName)
-			childToBtc := convert(childCoinName, "BTC")
-			childToEth := convert(childCoinName, "ETH")
-			fmt.Printf("\tBTC : %v\n", childToBtc)
-			fmt.Printf("\tETH : %v\n", childToEth)
-			fmt.Println()
-			fmt.Printf("\t%v -> BTC -> USD : %v\n", childCoinName, childToBtc.Mul(convert("BTC", "USDT")))
-			fmt.Printf("\t%v -> ETH -> USD : %v\n", childCoinName, childToEth.Mul(convert("ETH", "USDT")))
-			fmt.Println()
-			indirectToEth := convert("BTC", childCoinName).Mul(convert(childCoinName, "ETH"))
-			indirectToBtc := convert("ETH", childCoinName).Mul(convert(childCoinName, "BTC"))
-			directToEth := convert("BTC", "ETH")
-			directToBtc := convert("ETH", "BTC")
-			fmt.Printf("\tBTC -> %v -> ETH: %v\n", childCoinName, indirectToEth)
-			fmt.Printf("\tBTC -> ETH      : %v\n", directToEth)
-			diffEth := indirectToEth.Add(directToEth.Neg())
-			fmt.Printf("\tDiff ETH: %v\n", diffEth)
-			diffEthUsdt := convert("ETH", "USDT").Mul(diffEth)
-			fmt.Printf("\tDiff in USDT: %v\n", diffEthUsdt)
-			fmt.Printf("\tGain per USDT: %v\n", diffEthUsdt.Div(convert("ETH", "USDT")))
-
-			fmt.Println()
-			fmt.Printf("\tETH -> %v -> BTC  : %v\n", childCoinName, indirectToBtc)
-			fmt.Printf("\tETH -> BTC        : %v\n", directToBtc)
-			diffBtc := indirectToBtc.Add(directToBtc.Neg())
-			fmt.Printf("\tDiff BTC: %v\n", diffBtc)
-			diffBtcUsdt := convert("BTC", "USDT").Mul(diffBtc)
-			fmt.Printf("\tDiff in USDT: %v\n", diffBtcUsdt)
-			fmt.Printf("\tGain per USDT: %v\n", diffBtcUsdt.Div(convert("BTC", "USDT")))
+			childCoins[childCoinName].Summary.ChildToBtc = convert(childCoinName, "BTC")
+			childCoins[childCoinName].Summary.ChildToEth = convert(childCoinName, "ETH")
+			childCoins[childCoinName].Summary.IndirectToEth = convert("BTC", childCoinName).Mul(convert(childCoinName, "ETH"))
+			childCoins[childCoinName].Summary.IndirectToBtc = convert("ETH", childCoinName).Mul(convert(childCoinName, "BTC"))
+			childCoins[childCoinName].Summary.DirectToEth = convert("BTC", "ETH")
+			childCoins[childCoinName].Summary.DirectToBtc = convert("ETH", "BTC")
+			childCoins[childCoinName].Summary.DiffEth = childCoins[childCoinName].Summary.IndirectToEth.Add(childCoins[childCoinName].Summary.DirectToEth.Neg())
+			childCoins[childCoinName].Summary.DiffBtc = childCoins[childCoinName].Summary.IndirectToBtc.Add(childCoins[childCoinName].Summary.DirectToBtc.Neg())
+			childCoins[childCoinName].Summary.DiffEthUsdt = convert("ETH", "USDT").Mul(childCoins[childCoinName].Summary.DiffEth)
+			childCoins[childCoinName].Summary.DiffBtcUsdt = convert("BTC", "USDT").Mul(childCoins[childCoinName].Summary.DiffBtc)
 		}
 
 	}
-	fmt.Println("-------------------------------------------------------------")
-	for parentCoinName, parentCoinValue := range parentCoins {
-		fmt.Printf("%v:\n", parentCoinName)
-		fmt.Printf("\tBTC : %v\n", parentCoinValue.Btc)
-		fmt.Printf("\tETH : %v\n", parentCoinValue.Eth)
-		fmt.Printf("\tUSDT: %v\n", parentCoinValue.Usdt)
+}
 
+func printCoinSummary(childCoinName string) {
+	child := childCoins[childCoinName]
+	_, childIsParent := parentCoins[childCoinName]
+	if len(childCoins[childCoinName].ParentCoins) == 2 && !childIsParent {
+		fmt.Printf("%v:\n", childCoinName)
+		fmt.Printf("\tBTC : %v\n", child.Summary.ChildToBtc)
+		fmt.Printf("\tETH : %v\n", child.Summary.ChildToEth)
+		fmt.Println()
+		fmt.Printf("\t%v -> BTC -> USD : %v\n", child.Name, child.Summary.ChildToBtc.Mul(convert("BTC", "USDT")))
+		fmt.Printf("\t%v -> ETH -> USD : %v\n", child.Name, child.Summary.ChildToEth.Mul(convert("ETH", "USDT")))
+		fmt.Println()
+
+		fmt.Printf("\tBTC -> %v -> ETH: %v\n", child.Name, child.Summary.IndirectToEth)
+		fmt.Printf("\tBTC -> ETH      : %v\n", child.Summary.DirectToEth)
+		fmt.Printf("\tDiff ETH: %v\n", child.Summary.DiffEth)
+		fmt.Printf("\tDiff in USDT: %v\n", child.Summary.DiffEthUsdt)
+		fmt.Printf("\tGain per USDT: %v\n", child.Summary.DiffEthUsdt.Div(convert("ETH", "USDT")))
+
+		fmt.Println()
+		fmt.Printf("\tETH -> %v -> BTC  : %v\n", child.Name, child.Summary.IndirectToBtc)
+		fmt.Printf("\tETH -> BTC        : %v\n", child.Summary.DirectToBtc)
+
+		fmt.Printf("\tDiff BTC: %v\n", child.Summary.DiffBtc)
+
+		fmt.Printf("\tDiff in USDT: %v\n", child.Summary.DiffBtcUsdt)
+		fmt.Printf("\tGain per USDT: %v\n", child.Summary.DiffBtcUsdt.Div(convert("BTC", "USDT")))
+		fmt.Println("-------------------------------------------------------------")
 	}
 }
 
@@ -195,7 +198,17 @@ func main() {
 			marketSummaries, err := updateMarketSummaries(bittrexClient)
 			go func() {
 				populateCoins(marketSummaries)
-				printCoinValues()
+				populateCoinSummary()
+				for childCoinName := range childCoins {
+					printCoinSummary(childCoinName)
+				}
+				for parentCoinName, parentCoinValue := range parentCoins {
+					fmt.Printf("%v:\n", parentCoinName)
+					fmt.Printf("\tBTC : %v\n", parentCoinValue.Btc)
+					fmt.Printf("\tETH : %v\n", parentCoinValue.Eth)
+					fmt.Printf("\tUSDT: %v\n", parentCoinValue.Usdt)
+
+				}
 			}()
 			if err == nil {
 
@@ -227,4 +240,17 @@ type childCoin struct {
 	Btc         decimal.Decimal
 	Eth         decimal.Decimal
 	ParentCoins []string
+	Summary     summary
+}
+type summary struct {
+	ChildToBtc    decimal.Decimal
+	ChildToEth    decimal.Decimal
+	IndirectToEth decimal.Decimal
+	IndirectToBtc decimal.Decimal
+	DirectToEth   decimal.Decimal
+	DirectToBtc   decimal.Decimal
+	DiffEth       decimal.Decimal
+	DiffBtc       decimal.Decimal
+	DiffEthUsdt   decimal.Decimal
+	DiffBtcUsdt   decimal.Decimal
 }
