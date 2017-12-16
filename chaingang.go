@@ -55,7 +55,7 @@ func populateCoins(marketSummaries []bittrex.MarketSummary) {
 					parentCoins[newParentCoinName].Eth = decimal.NewFromFloat(1).Div(marketSummary.Last)
 				}
 			default:
-				fmt.Printf("Warning : No support for parent coin : %v", newParentCoinName)
+				fmt.Printf("Warning : No support for parent coin : %v\n", newParentCoinName)
 			}
 		}
 
@@ -70,13 +70,28 @@ func populateCoins(marketSummaries []bittrex.MarketSummary) {
 			childCoins[newChildCoinName].Btc = marketSummary.Last
 		case "ETH":
 			childCoins[newChildCoinName].Eth = marketSummary.Last
+		case "USDT":
+			//do nothing
 		default:
-			fmt.Printf("Warning : No support for parent coin : %v", newParentCoinName)
+			fmt.Printf("Warning : No support for parent coin : %v\n", newParentCoinName)
 		}
-		childCoins[newChildCoinName].ParentCoins = append(childCoins[newChildCoinName].ParentCoins, newParentCoinName)
-		parentCoins[newParentCoinName].ChildCoins = append(parentCoins[newParentCoinName].ChildCoins, newChildCoinName)
+		if !contains(childCoins[newChildCoinName].ParentCoins, newParentCoinName) {
+			childCoins[newChildCoinName].ParentCoins = append(childCoins[newChildCoinName].ParentCoins, newParentCoinName)
+		}
+		if !contains(parentCoins[newParentCoinName].ChildCoins, newChildCoinName) {
+			parentCoins[newParentCoinName].ChildCoins = append(parentCoins[newParentCoinName].ChildCoins, newChildCoinName)
+		}
 
 	}
+}
+
+func contains(slice []string, value string) bool {
+	for _, a := range slice {
+		if a == value {
+			return true
+		}
+	}
+	return false
 }
 
 func convert(inputCoinName string, outputCoinName string) decimal.Decimal {
@@ -288,5 +303,3 @@ type summary struct {
 	DiffBtcPerUsdt decimal.Decimal
 	DiffEthPerUsdt decimal.Decimal
 }
-
-type childCoinCollection []childCoin
