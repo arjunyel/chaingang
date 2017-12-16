@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 	"time"
 
@@ -126,6 +127,9 @@ func populateCoinSummary() {
 			childCoins[childCoinName].Summary.DiffBtc = childCoins[childCoinName].Summary.IndirectToBtc.Add(childCoins[childCoinName].Summary.DirectToBtc.Neg())
 			childCoins[childCoinName].Summary.DiffEthUsdt = convert("ETH", "USDT").Mul(childCoins[childCoinName].Summary.DiffEth)
 			childCoins[childCoinName].Summary.DiffBtcUsdt = convert("BTC", "USDT").Mul(childCoins[childCoinName].Summary.DiffBtc)
+			childCoins[childCoinName].Summary.DiffBtcPerUsdt = childCoins[childCoinName].Summary.DiffBtcUsdt.Div(convert("BTC", "USDT"))
+			childCoins[childCoinName].Summary.DiffEthPerUsdt = childCoins[childCoinName].Summary.DiffEthUsdt.Div(convert("ETH", "USDT"))
+
 		}
 
 	}
@@ -147,7 +151,7 @@ func printCoinSummary(childCoinName string) {
 		fmt.Printf("\tBTC -> ETH      : %v\n", child.Summary.DirectToEth)
 		fmt.Printf("\tDiff ETH: %v\n", child.Summary.DiffEth)
 		fmt.Printf("\tDiff in USDT: %v\n", child.Summary.DiffEthUsdt)
-		fmt.Printf("\tGain per USDT: %v\n", child.Summary.DiffEthUsdt.Div(convert("ETH", "USDT")))
+		fmt.Printf("\tGain per USDT: %v\n", child.Summary.DiffEthPerUsdt)
 
 		fmt.Println()
 		fmt.Printf("\tETH -> %v -> BTC  : %v\n", child.Name, child.Summary.IndirectToBtc)
@@ -156,7 +160,7 @@ func printCoinSummary(childCoinName string) {
 		fmt.Printf("\tDiff BTC: %v\n", child.Summary.DiffBtc)
 
 		fmt.Printf("\tDiff in USDT: %v\n", child.Summary.DiffBtcUsdt)
-		fmt.Printf("\tGain per USDT: %v\n", child.Summary.DiffBtcUsdt.Div(convert("BTC", "USDT")))
+		fmt.Printf("\tGain per USDT: %v\n", child.Summary.DiffBtcPerUsdt)
 		fmt.Println("-------------------------------------------------------------")
 	}
 }
@@ -199,8 +203,36 @@ func main() {
 			go func() {
 				populateCoins(marketSummaries)
 				populateCoinSummary()
-				for childCoinName := range childCoins {
-					printCoinSummary(childCoinName)
+
+				childCoinSlice := make([]childCoin, len(childCoins))
+
+				childCoinSliceIndex := 0
+				for _, coin := range childCoins {
+					childCoinSlice[childCoinSliceIndex] = *coin
+					childCoinSliceIndex++
+				}
+
+				sort.Slice(childCoinSlice, func(a, b int) bool {
+					var aValue, bValue float64
+					childCoinA := childCoinSlice[a]
+					childCoinB := childCoinSlice[b]
+
+					if childCoinA.Summary.DiffBtcPerUsdt.GreaterThan(childCoinA.Summary.DiffEthPerUsdt) {
+						aValue, _ = childCoinA.Summary.DiffBtcPerUsdt.Mul(decimal.NewFromFloat(10000)).Float64()
+					} else if childCoinA.Summary.DiffBtcPerUsdt.LessThan(childCoinA.Summary.DiffEthPerUsdt) {
+						aValue, _ = childCoinA.Summary.DiffEthPerUsdt.Mul(decimal.NewFromFloat(10000)).Float64()
+					}
+
+					if childCoinB.Summary.DiffBtcPerUsdt.GreaterThan(childCoinB.Summary.DiffEthPerUsdt) {
+						bValue, _ = childCoinB.Summary.DiffBtcPerUsdt.Mul(decimal.NewFromFloat(10000)).Float64()
+					} else if childCoinB.Summary.DiffBtcPerUsdt.LessThan(childCoinB.Summary.DiffEthPerUsdt) {
+						bValue, _ = childCoinB.Summary.DiffEthPerUsdt.Mul(decimal.NewFromFloat(10000)).Float64()
+					}
+					return aValue < bValue
+				})
+
+				for _, coin := range childCoinSlice {
+					printCoinSummary(coin.Name)
 				}
 				for parentCoinName, parentCoinValue := range parentCoins {
 					fmt.Printf("%v:\n", parentCoinName)
@@ -243,14 +275,18 @@ type childCoin struct {
 	Summary     summary
 }
 type summary struct {
-	ChildToBtc    decimal.Decimal
-	ChildToEth    decimal.Decimal
-	IndirectToEth decimal.Decimal
-	IndirectToBtc decimal.Decimal
-	DirectToEth   decimal.Decimal
-	DirectToBtc   decimal.Decimal
-	DiffEth       decimal.Decimal
-	DiffBtc       decimal.Decimal
-	DiffEthUsdt   decimal.Decimal
-	DiffBtcUsdt   decimal.Decimal
+	ChildToBtc     decimal.Decimal
+	ChildToEth     decimal.Decimal
+	IndirectToEth  decimal.Decimal
+	IndirectToBtc  decimal.Decimal
+	DirectToEth    decimal.Decimal
+	DirectToBtc    decimal.Decimal
+	DiffEth        decimal.Decimal
+	DiffBtc        decimal.Decimal
+	DiffEthUsdt    decimal.Decimal
+	DiffBtcUsdt    decimal.Decimal
+	DiffBtcPerUsdt decimal.Decimal
+	DiffEthPerUsdt decimal.Decimal
 }
+
+type childCoinCollection []childCoin
