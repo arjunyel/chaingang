@@ -87,9 +87,9 @@ func convert(inputCoinName string, outputCoinName string) decimal.Decimal {
 	if inputIsParentCoin && !outputIsParentCoin {
 		switch inputCoinName {
 		case "BTC":
-			output = childCoins[outputCoinName].Btc
+			output = decimal.NewFromFloat(1).Div(childCoins[outputCoinName].Btc)
 		case "ETH":
-			output = childCoins[outputCoinName].Eth
+			output = decimal.NewFromFloat(1).Div(childCoins[outputCoinName].Eth)
 		}
 	} else if inputIsParentCoin && outputIsParentCoin {
 		switch outputCoinName {
@@ -117,19 +117,34 @@ func printCoinValues() {
 		_, childIsParent := parentCoins[childCoinName]
 		if len(childCoinValue.ParentCoins) == 2 && !childIsParent {
 			fmt.Printf("%v:\n", childCoinName)
-			directToBtc := convert(childCoinName, "BTC")
-			directToEth := convert(childCoinName, "ETH")
-			fmt.Printf("\tBTC : %v\n", directToBtc)
-			fmt.Printf("\tETH : %v\n", directToEth)
+			childToBtc := convert(childCoinName, "BTC")
+			childToEth := convert(childCoinName, "ETH")
+			fmt.Printf("\tBTC : %v\n", childToBtc)
+			fmt.Printf("\tETH : %v\n", childToEth)
 			fmt.Println()
-			fmt.Printf("\t%v -> BTC -> USD : %v\n",childCoinName,directToBtc.Mul(convert("BTC","USDT")))
-			fmt.Printf("\t%v -> ETH -> USD : %v\n",childCoinName,directToEth.Mul(convert("ETH","USDT")))
+			fmt.Printf("\t%v -> BTC -> USD : %v\n", childCoinName, childToBtc.Mul(convert("BTC", "USDT")))
+			fmt.Printf("\t%v -> ETH -> USD : %v\n", childCoinName, childToEth.Mul(convert("ETH", "USDT")))
 			fmt.Println()
-			fmt.Printf("\tBTC -> %v -> ETH -> USD: %v\n", childCoinName, convert("BTC", childCoinName).Mul(convert(childCoinName, "ETH")).Mul(convert("ETH", "USDT")))
-			fmt.Printf("\tBTC -> ETH -> USDT     : %v\n", convert("BTC", "ETH").Mul(convert("ETH", "USDT")))
+			indirectToEth := convert("BTC", childCoinName).Mul(convert(childCoinName, "ETH"))
+			indirectToBtc := convert("ETH", childCoinName).Mul(convert(childCoinName, "BTC"))
+			directToEth := convert("BTC", "ETH")
+			directToBtc := convert("ETH", "BTC")
+			fmt.Printf("\tBTC -> %v -> ETH: %v\n", childCoinName, indirectToEth)
+			fmt.Printf("\tBTC -> ETH      : %v\n", directToEth)
+			diffEth := indirectToEth.Add(directToEth.Neg())
+			fmt.Printf("\tDiff ETH: %v\n", diffEth)
+			diffEthUsdt := convert("ETH", "USDT").Mul(diffEth)
+			fmt.Printf("\tDiff in USDT: %v\n", diffEthUsdt)
+			fmt.Printf("\tGain per USDT: %v\n", diffEthUsdt.Div(convert("ETH", "USDT")))
+
 			fmt.Println()
-			fmt.Printf("\tETH -> %v -> BTC -> USD: %v\n", childCoinName, convert("ETH", childCoinName).Mul(convert(childCoinName, "BTC")).Mul(convert("BTC", "USDT")))
-			fmt.Printf("\tBTC -> ETH -> USDT     : %v\n", convert("ETH", "BTC").Mul(convert("BTC", "USDT")))
+			fmt.Printf("\tETH -> %v -> BTC  : %v\n", childCoinName, indirectToBtc)
+			fmt.Printf("\tETH -> BTC        : %v\n", directToBtc)
+			diffBtc := indirectToBtc.Add(directToBtc.Neg())
+			fmt.Printf("\tDiff BTC: %v\n", diffBtc)
+			diffBtcUsdt := convert("BTC", "USDT").Mul(diffBtc)
+			fmt.Printf("\tDiff in USDT: %v\n", diffBtcUsdt)
+			fmt.Printf("\tGain per USDT: %v\n", diffBtcUsdt.Div(convert("BTC", "USDT")))
 		}
 
 	}
