@@ -117,8 +117,10 @@ func printCoinValues() {
 		_, childIsParent := parentCoins[childCoinName]
 		if len(childCoinValue.ParentCoins) == 2 && !childIsParent {
 			fmt.Printf("%v:\n", childCoinName)
-			fmt.Printf("\tBTC : %v\n", childCoinValue.Btc)
-			fmt.Printf("\tETH : %v\n", childCoinValue.Eth)
+			directToBtc := convert(childCoinName, "BTC")
+			directToEth := convert(childCoinName, "ETH")
+			fmt.Printf("\tBTC : %v\n", directToBtc)
+			fmt.Printf("\tETH : %v\n", directToEth)
 			fmt.Println()
 		}
 
