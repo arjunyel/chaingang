@@ -148,6 +148,45 @@ func populateCoinSummary() {
 	}
 }
 
+/* ************************************************************************************************
+ * Trading
+ * ***********************************************************************************************/
+
+func buy(inputCoinName string, outputCoinName string) {
+	_, inputIsParentCoin := parentCoins[inputCoinName]
+	_, outputIsParentCoin := parentCoins[outputCoinName]
+
+	var market string
+	var quantity int
+	var rate decimal.Decimal
+	if inputIsParentCoin && outputIsParentCoin {
+		switch inputCoinName {
+		case "ETH":
+			market = outputCoinName + "-" + inputCoinName
+		case "BTC":
+			switch outputCoinName {
+			case "ETH":
+				market = inputCoinName + "-" + outputCoinName
+			case "USDT":
+				market = outputCoinName + "-" + inputCoinName
+			}
+		case "USDT":
+			market = inputCoinName + "-" + outputCoinName
+		}
+	} else if inputIsParentCoin && !outputIsParentCoin {
+		market = inputCoinName + "-" + outputCoinName
+		switch inputCoinName {
+		case "BTC":
+			rate = childCoins[outputCoinName].Btc
+		case "ETH":
+			rate = childCoins[outputCoinName].Eth
+		}
+	} else if !inputIsParentCoin && outputIsParentCoin {
+		fmt.Printf("Buying : %v -> %v Not Supported", inputCoinName, outputCoinName)
+	}
+	fmt.Printf("Buy:\n\tmarket : %v\n\tquantity : %v\n\trate : %v\n", market, quantity, rate)
+}
+
 /* ****************************************************************************************
  * Display
  * ***************************************************************************************/
@@ -304,6 +343,9 @@ func main() {
 					fmt.Printf("\tUSDT: %v\n", parentCoinValue.Usdt)
 
 				}
+				//test buy
+				buy("BTC", "ADA")
+
 			}()
 			if err == nil {
 
