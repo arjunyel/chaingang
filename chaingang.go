@@ -11,10 +11,6 @@ import (
 	"github.com/toorop/go-bittrex"
 )
 
-type marketRecord struct {
-	MarketSummary bittrex.MarketSummary
-}
-
 type parentCoin struct {
 	Name       string
 	Btc        decimal.Decimal
