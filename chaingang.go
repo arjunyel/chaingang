@@ -161,29 +161,35 @@ func populateCoinSummary() {
  * Trading
  * ***********************************************************************************************/
 
-func buy(inputCoinName string, outputCoinName string) {
+func transfer(inputCoinName string, outputCoinName string) {
 	_, inputIsParentCoin := parentCoins[inputCoinName]
 	_, outputIsParentCoin := parentCoins[outputCoinName]
 
 	var market string
 	var quantity int
 	var rate decimal.Decimal
+	var transferType string
 	if inputIsParentCoin && outputIsParentCoin {
 		switch inputCoinName {
 		case "ETH":
-			market = outputCoinName + "-" + inputCoinName
+			market = getMarketName(outputCoinName, inputCoinName)
+			transferType = "sell"
 		case "BTC":
 			switch outputCoinName {
 			case "ETH":
-				market = inputCoinName + "-" + outputCoinName
+				market = getMarketName(inputCoinName, outputCoinName)
+				transferType = "buy"
 			case "USDT":
-				market = outputCoinName + "-" + inputCoinName
+				market = getMarketName(outputCoinName, inputCoinName)
+				transferType = "sell"
 			}
 		case "USDT":
-			market = inputCoinName + "-" + outputCoinName
+			market = getMarketName(inputCoinName, outputCoinName)
+			transferType = "buy"
 		}
 	} else if inputIsParentCoin && !outputIsParentCoin {
-		market = inputCoinName + "-" + outputCoinName
+		market = getMarketName(inputCoinName, outputCoinName)
+		transferType = "buy"
 		switch inputCoinName {
 		case "BTC":
 			rate = childCoins[outputCoinName].Btc
@@ -191,9 +197,16 @@ func buy(inputCoinName string, outputCoinName string) {
 			rate = childCoins[outputCoinName].Eth
 		}
 	} else if !inputIsParentCoin && outputIsParentCoin {
-		fmt.Printf("Buying : %v -> %v Not Supported", inputCoinName, outputCoinName)
+		market = getMarketName(outputCoinName, inputCoinName)
+		transferType = "sell"
+		switch outputCoinName {
+		case "BTC":
+			rate = childCoins[inputCoinName].Btc
+		case "ETH":
+			rate = childCoins[inputCoinName].Eth
+		}
 	}
-	fmt.Printf("Buy:\n\tmarket : %v\n\tquantity : %v\n\trate : %v\n", market, quantity, rate)
+	fmt.Printf("%v:\n\tmarket : %v\n\tquantity : %v\n\trate : %v\n", transferType, market, quantity, rate)
 }
 
 /* ****************************************************************************************
@@ -276,6 +289,10 @@ func convert(inputCoinName string, outputCoinName string) decimal.Decimal {
 	return output
 }
 
+func getMarketName(pre, post string) string {
+	return pre + "-" + post
+}
+
 func main() {
 	var parentCoinNames = [...]string{"BTC", "ETH", "USDT"}
 	bittrexThreshhold := time.Duration(10) * time.Second
@@ -353,7 +370,8 @@ func main() {
 
 				}
 				//test buy
-				buy("BTC", "ADA")
+				transfer("BTC", "ADA")
+				transfer("ADA", "ETH")
 
 			}()
 			if err == nil {
