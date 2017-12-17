@@ -20,9 +20,10 @@ type parentCoin struct {
 }
 
 type childCoin struct {
-	Name        string
-	Btc         decimal.Decimal
-	Eth         decimal.Decimal
+	Name string
+	Btc  decimal.Decimal
+	Eth  decimal.Decimal
+	//TODO add usdt
 	ParentCoins []string
 	Summary     summary
 }
@@ -44,11 +45,9 @@ type summary struct {
 // Global Variables
 var (
 	transactionFee = decimal.NewFromFloat(.0025)
+	parentCoins    = map[string]*parentCoin{}
+	childCoins     = map[string]*childCoin{}
 )
-
-//Storage
-var parentCoins = map[string]*parentCoin{}
-var childCoins = map[string]*childCoin{}
 
 /* ******************************************************************
  * API Calls
@@ -63,10 +62,8 @@ func updateMarketSummaries(bittrexClient *bittrex.Bittrex) ([]bittrex.MarketSumm
  * *****************************************************************/
 func populateCoins(marketSummaries []bittrex.MarketSummary) {
 	for _, marketSummary := range marketSummaries {
-
 		newParentCoinName := strings.Split(marketSummary.MarketName, "-")[0]
 		newChildCoinName := strings.Split(marketSummary.MarketName, "-")[1]
-		//calculate nonUSDT
 		if _, childIsParent := parentCoins[newChildCoinName]; childIsParent {
 			switch newParentCoinName {
 			case "BTC":
@@ -125,12 +122,7 @@ func populateCoins(marketSummaries []bittrex.MarketSummary) {
 				parentCoins[newParentCoinName].ChildCoins = append(parentCoins[newParentCoinName].ChildCoins, newChildCoinName)
 			}
 		}
-
 	}
-}
-
-func applyTransactionFee(input decimal.Decimal) decimal.Decimal {
-	return input.Add((input.Mul(transactionFee).Neg()))
 }
 
 func populateCoinSummary() {
@@ -149,9 +141,7 @@ func populateCoinSummary() {
 			childCoins[childCoinName].Summary.DiffBtcUsdt = convert("BTC", "USDT").Mul(childCoins[childCoinName].Summary.DiffBtc)
 			childCoins[childCoinName].Summary.DiffBtcPerUsdt = childCoins[childCoinName].Summary.DiffBtcUsdt.Div(convert("BTC", "USDT"))
 			childCoins[childCoinName].Summary.DiffEthPerUsdt = childCoins[childCoinName].Summary.DiffEthUsdt.Div(convert("ETH", "USDT"))
-
 		}
-
 	}
 }
 
@@ -164,7 +154,7 @@ func transfer(inputCoinName string, outputCoinName string) {
 	_, outputIsParentCoin := parentCoins[outputCoinName]
 
 	var market string
-	var quantity int
+	var quantity decimal.Decimal
 	var rate decimal.Decimal
 	var transferType string
 	if inputIsParentCoin && outputIsParentCoin {
@@ -269,11 +259,11 @@ func convert(inputCoinName string, outputCoinName string) decimal.Decimal {
 	} else if inputIsParentCoin && outputIsParentCoin {
 		switch outputCoinName {
 		case "BTC":
-			output = applyTransactionFee(parentCoins[inputCoinName].Btc)
+			output = applyTransactionFee(decimal.NewFromFloat(1)).Mul(parentCoins[inputCoinName].Btc)
 		case "ETH":
-			output = applyTransactionFee(parentCoins[inputCoinName].Eth)
+			output = applyTransactionFee(decimal.NewFromFloat(1)).Mul(parentCoins[inputCoinName].Eth)
 		case "USDT":
-			output = applyTransactionFee(parentCoins[inputCoinName].Usdt)
+			output = applyTransactionFee(decimal.NewFromFloat(1)).Mul(parentCoins[inputCoinName].Usdt)
 		}
 	} else if !inputIsParentCoin && outputIsParentCoin {
 		switch outputCoinName {
@@ -289,6 +279,10 @@ func convert(inputCoinName string, outputCoinName string) decimal.Decimal {
 
 func getMarketName(pre, post string) string {
 	return pre + "-" + post
+}
+
+func applyTransactionFee(input decimal.Decimal) decimal.Decimal {
+	return input.Add((input.Mul(transactionFee).Neg()))
 }
 
 func main() {
