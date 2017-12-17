@@ -121,11 +121,13 @@ func populateCoins(marketSummaries []bittrex.MarketSummary) {
 		default:
 			fmt.Printf("Warning : No support for parent coin : %v\n", newParentCoinName)
 		}
-		if !contains(childCoins[newChildCoinName].ParentCoins, newParentCoinName) {
-			childCoins[newChildCoinName].ParentCoins = append(childCoins[newChildCoinName].ParentCoins, newParentCoinName)
-		}
-		if !contains(parentCoins[newParentCoinName].ChildCoins, newChildCoinName) {
-			parentCoins[newParentCoinName].ChildCoins = append(parentCoins[newParentCoinName].ChildCoins, newChildCoinName)
+		if newParentCoinName != "USDT" {
+			if !contains(childCoins[newChildCoinName].ParentCoins, newParentCoinName) {
+				childCoins[newChildCoinName].ParentCoins = append(childCoins[newChildCoinName].ParentCoins, newParentCoinName)
+			}
+			if !contains(parentCoins[newParentCoinName].ChildCoins, newChildCoinName) {
+				parentCoins[newParentCoinName].ChildCoins = append(parentCoins[newParentCoinName].ChildCoins, newChildCoinName)
+			}
 		}
 
 	}
