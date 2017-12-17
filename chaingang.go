@@ -162,18 +162,32 @@ func transfer(inputCoinName string, outputCoinName string) {
 		case "ETH":
 			market = getMarketName(outputCoinName, inputCoinName)
 			transferType = "sell"
+			switch outputCoinName {
+			case "BTC":
+				rate = parentCoins[inputCoinName].Btc
+			case "USDT":
+				rate = parentCoins[outputCoinName].Eth
+			}
 		case "BTC":
 			switch outputCoinName {
 			case "ETH":
 				market = getMarketName(inputCoinName, outputCoinName)
 				transferType = "buy"
+				rate = parentCoins[outputCoinName].Btc
 			case "USDT":
 				market = getMarketName(outputCoinName, inputCoinName)
 				transferType = "sell"
+				rate = parentCoins[outputCoinName].Btc
 			}
 		case "USDT":
 			market = getMarketName(inputCoinName, outputCoinName)
 			transferType = "buy"
+			switch outputCoinName {
+			case "ETH":
+				rate = parentCoins[inputCoinName].Eth
+			case "BTC":
+				rate = parentCoins[inputCoinName].Btc
+			}
 		}
 	} else if inputIsParentCoin && !outputIsParentCoin {
 		market = getMarketName(inputCoinName, outputCoinName)
