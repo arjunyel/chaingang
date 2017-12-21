@@ -142,6 +142,26 @@ func populateCoins() {
 	}
 }
 
+func testCalc() {
+	for marketName := range validMarkets[exchangeName] {
+		for otherMarketName := range validMarkets[exchangeName] {
+			if marketName != otherMarketName && marketName != "USDT" {
+				directAsk, _, _, _ := convert(marketName, otherMarketName, decimal.NewFromFloat(1))
+				fmt.Printf("Direct Ask %v -> %v : %v\n", marketName, otherMarketName, directAsk)
+				for coinName := range coins {
+					first, _, _, firstConvertable := convert(marketName, coinName, decimal.NewFromFloat(1))
+					second, _, _, secondConvertable := convert(coinName, otherMarketName, first)
+					if firstConvertable && secondConvertable {
+						fmt.Printf("\tIndirect %v -> %v -> %v : %v\n", marketName, coinName, otherMarketName, second)
+					}
+
+				}
+			}
+		}
+	}
+}
+
+/*
 func populateCoinSummary() {
 	for childCoinName, childCoinValue := range childCoins {
 		_, childIsParent := parentCoins[childCoinName]
@@ -160,12 +180,12 @@ func populateCoinSummary() {
 			childCoins[childCoinName].Summary.DiffEthPerUsdt = childCoins[childCoinName].Summary.DiffEthUsdt.Div(convert("ETH", "USDT"))
 		}
 	}
-}
+}*/
 
 /* ************************************************************************************************
  * Trading
  * ***********************************************************************************************/
-
+/*
 func transfer(inputCoinName string, outputCoinName string) {
 	_, inputIsParentCoin := parentCoins[inputCoinName]
 	_, outputIsParentCoin := parentCoins[outputCoinName]
@@ -227,11 +247,11 @@ func transfer(inputCoinName string, outputCoinName string) {
 	}
 	fmt.Printf("%v:\n\tmarket : %v\n\tquantity : %v\n\trate : %v\n", transferType, market, quantity, rate)
 }
-
+*/
 /* ****************************************************************************************
  * Display
  * ***************************************************************************************/
-
+/*
 func printCoinSummary(childCoinName string) {
 	child := childCoins[childCoinName]
 	_, childIsParent := parentCoins[childCoinName]
@@ -261,7 +281,7 @@ func printCoinSummary(childCoinName string) {
 		fmt.Println("-------------------------------------------------------------")
 	}
 }
-
+*/
 /* ***************************************************************************************
  * Utils
  * **************************************************************************************/
@@ -288,38 +308,54 @@ func isValidRelationship(exchangeName, relationshipName string) bool {
 	return output
 }
 
-func convert(inputCoinName string, outputCoinName string) decimal.Decimal {
-	output := decimal.NewFromFloat(0)
-
-	_, inputIsParentCoin := parentCoins[inputCoinName]
-	_, outputIsParentCoin := parentCoins[outputCoinName]
-
-	if inputIsParentCoin && !outputIsParentCoin {
-		switch inputCoinName {
-		case "BTC":
-			output = applyTransactionFee(decimal.NewFromFloat(1)).Div(childCoins[outputCoinName].Btc)
-		case "ETH":
-			output = applyTransactionFee(decimal.NewFromFloat(1)).Div(childCoins[outputCoinName].Eth)
-		}
-	} else if inputIsParentCoin && outputIsParentCoin {
-		switch outputCoinName {
-		case "BTC":
-			output = applyTransactionFee(decimal.NewFromFloat(1)).Mul(parentCoins[inputCoinName].Btc)
-		case "ETH":
-			output = applyTransactionFee(decimal.NewFromFloat(1)).Mul(parentCoins[inputCoinName].Eth)
-		case "USDT":
-			output = applyTransactionFee(decimal.NewFromFloat(1)).Mul(parentCoins[inputCoinName].Usdt)
-		}
-	} else if !inputIsParentCoin && outputIsParentCoin {
-		switch outputCoinName {
-		case "BTC":
-			output = applyTransactionFee(childCoins[inputCoinName].Btc)
-		case "ETH":
-			output = applyTransactionFee(childCoins[inputCoinName].Eth)
-		}
+func convert(inputName string, outputName string, inputQuantity decimal.Decimal) (decimal.Decimal, decimal.Decimal, decimal.Decimal, bool) {
+	outputAsk := decimal.NewFromFloat(0)
+	outputBid := decimal.NewFromFloat(0)
+	outputLast := decimal.NewFromFloat(0)
+	outputConvertable := true
+	_, coinHasRelationship := coins[inputName].Relationships[outputName]
+	_, coinHasRelationshipReverse := coins[outputName].Relationships[inputName]
+	if coinHasRelationship {
+		withTransaction := applyTransactionFee(inputQuantity)
+		outputAsk = withTransaction.Mul(coins[inputName].Relationships[outputName].Ask)
+		outputBid = withTransaction.Mul(coins[inputName].Relationships[outputName].Bid)
+		outputLast = withTransaction.Mul(coins[inputName].Relationships[outputName].Last)
+	} else if coinHasRelationshipReverse {
+		withTransaction := applyTransactionFee(inputQuantity)
+		outputAsk = withTransaction.Mul(decimal.NewFromFloat(1).Div(coins[outputName].Relationships[inputName].Ask))
+		outputBid = withTransaction.Mul(decimal.NewFromFloat(1).Div(coins[outputName].Relationships[inputName].Bid))
+		outputLast = withTransaction.Mul(decimal.NewFromFloat(1).Div(coins[outputName].Relationships[inputName].Last))
+	} else {
+		//fmt.Printf("Unable to conver %v -> %v\n", inputName, outputName)
+		outputConvertable = false
 	}
+	/*
+		if inputIsParentCoin && !outputIsParentCoin {
+			switch inputCoinName {
+			case "BTC":
+				output = applyTransactionFee(decimal.NewFromFloat(1)).Div(childCoins[outputCoinName].Btc)
+			case "ETH":
+				output = applyTransactionFee(decimal.NewFromFloat(1)).Div(childCoins[outputCoinName].Eth)
+			}
+		} else if inputIsParentCoin && outputIsParentCoin {
+			switch outputCoinName {
+			case "BTC":
+				output = applyTransactionFee(decimal.NewFromFloat(1)).Mul(parentCoins[inputCoinName].Btc)
+			case "ETH":
+				output = applyTransactionFee(decimal.NewFromFloat(1)).Mul(parentCoins[inputCoinName].Eth)
+			case "USDT":
+				output = applyTransactionFee(decimal.NewFromFloat(1)).Mul(parentCoins[inputCoinName].Usdt)
+			}
+		} else if !inputIsParentCoin && outputIsParentCoin {
+			switch outputCoinName {
+			case "BTC":
+				output = applyTransactionFee(childCoins[inputCoinName].Btc)
+			case "ETH":
+				output = applyTransactionFee(childCoins[inputCoinName].Eth)
+			}
+		}*/
 
-	return output
+	return outputAsk, outputBid, outputLast, outputConvertable
 }
 
 func getMarketName(pre, post string) string {
@@ -331,7 +367,7 @@ func applyTransactionFee(input decimal.Decimal) decimal.Decimal {
 }
 
 func main() {
-	var parentCoinNames = [...]string{"BTC", "ETH", "USDT"}
+	//var parentCoinNames = [...]string{"BTC", "ETH", "USDT"}
 	bittrexThreshhold := time.Duration(10) * time.Second
 	var bittrexKey, coinbaseKey, bittrexSecret string
 	fmt.Printf("chaingang running\n")
@@ -355,14 +391,6 @@ func main() {
 	if bittrexKey != "" && bittrexSecret != "" {
 		bittrexClient := bittrex.New(bittrexKey, bittrexSecret)
 
-		//populateParentCoin
-		for _, parentCoinName := range parentCoinNames {
-
-			parentCoins[parentCoinName] = &parentCoin{
-				Name: parentCoinName,
-			}
-		}
-
 		for {
 			marketSummaries, err := updateMarketSummaries(bittrexClient)
 			go func() {
@@ -370,15 +398,21 @@ func main() {
 				populateCoins()
 
 				for k, v := range coins {
-					if isValidRelationship(exchangeName, k) {
-						fmt.Printf("%v\n", k)
-						for n, r := range v.Relationships {
-							fmt.Printf("\t%v : \n", n)
-							fmt.Printf("\t\tAsk : %v\n\t\tBid : %v\n\t\tLast : %v\n", r.Ask, r.Bid, r.Last)
+					//if isValidRelationship(exchangeName, k) {
+					fmt.Printf("%v\n", k)
+					for n, r := range v.Relationships {
+						fmt.Printf("\t%v : \n", n)
+						fmt.Printf("\t\tAsk : %v\n\t\tBid : %v\n\t\tLast : %v\n", r.Ask, r.Bid, r.Last)
+						askV, _, _, convertable := convert(n, k, decimal.NewFromFloat(1))
+						if convertable {
+							fmt.Printf("\t\t\t%v -> %v : %v\n", n, k, askV)
 						}
+
 					}
+					//}
 
 				}
+				testCalc()
 
 				/*childCoinSlice := make([]childCoin, len(childCoins))
 
