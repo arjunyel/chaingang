@@ -3,13 +3,24 @@ package main
 import (
 	"fmt"
 	"os"
-	"sort"
 	"strings"
 	"time"
 
 	"github.com/shopspring/decimal"
 	"github.com/toorop/go-bittrex"
 )
+
+type Coin struct {
+	Name          string
+	Relationships map[string]Relationship
+}
+
+type Relationship struct {
+	Ask       decimal.Decimal
+	Bid       decimal.Decimal
+	Last      decimal.Decimal
+	Timestamp string
+}
 
 type parentCoin struct {
 	Name       string
@@ -47,6 +58,15 @@ var (
 	transactionFee = decimal.NewFromFloat(.0025)
 	parentCoins    = map[string]*parentCoin{}
 	childCoins     = map[string]*childCoin{}
+	coins          = map[string]*Coin{}
+	validMarkets   = map[string]map[string]bool{
+		"Bittrex": map[string]bool{
+			"BTC":  true,
+			"ETH":  true,
+			"USDT": true,
+		},
+	}
+	exchangeName = "Bittrex"
 )
 
 /* ******************************************************************
@@ -60,10 +80,70 @@ func updateMarketSummaries(bittrexClient *bittrex.Bittrex) ([]bittrex.MarketSumm
 /* ******************************************************************
  * Populate Metrics for Child and Parent Coins
  * *****************************************************************/
-func populateCoins(marketSummaries []bittrex.MarketSummary) {
+func createCoins(marketSummaries []bittrex.MarketSummary) {
 	for _, marketSummary := range marketSummaries {
-		newParentCoinName := strings.Split(marketSummary.MarketName, "-")[0]
-		newChildCoinName := strings.Split(marketSummary.MarketName, "-")[1]
+		relationshipName := strings.Split(marketSummary.MarketName, "-")[0]
+		coinName := strings.Split(marketSummary.MarketName, "-")[1]
+
+		_, coinExists := coins[coinName]
+		if !coinExists {
+			coins[coinName] = &Coin{
+				Name:          coinName,
+				Relationships: make(map[string]Relationship),
+			}
+		}
+		coins[coinName].Relationships[relationshipName] = Relationship{
+			Ask:  marketSummary.Ask,
+			Bid:  marketSummary.Bid,
+			Last: marketSummary.Last,
+		}
+	}
+
+	for marketName := range validMarkets[exchangeName] {
+		_, marketHasCoin := coins[marketName]
+		if !marketHasCoin {
+			coins[marketName] = &Coin{
+				Name:          marketName,
+				Relationships: make(map[string]Relationship),
+			}
+		}
+	}
+}
+
+func populateCoins() {
+
+	for coinName, coinValue := range coins {
+		for marketName := range validMarkets[exchangeName] {
+			if marketName != coinName {
+				_, hasRelationship := coinValue.Relationships[marketName]
+				if !hasRelationship && isValidRelationship(exchangeName, coinName) {
+					fmt.Printf("%v : %v\n", coinName, marketName)
+					ask := decimal.NewFromFloat(0)
+					bid := decimal.NewFromFloat(0)
+					last := decimal.NewFromFloat(0)
+					if coins[marketName].Relationships[coinName].Ask != decimal.NewFromFloat(0) {
+						ask = decimal.NewFromFloat(1).Div(coins[marketName].Relationships[coinName].Ask)
+					}
+					if coins[marketName].Relationships[coinName].Bid != decimal.NewFromFloat(0) {
+						bid = decimal.NewFromFloat(1).Div(coins[marketName].Relationships[coinName].Bid)
+					}
+					if coins[marketName].Relationships[coinName].Last != decimal.NewFromFloat(0) {
+						last = decimal.NewFromFloat(1).Div(coins[marketName].Relationships[coinName].Last)
+					}
+					coinValue.Relationships[marketName] = Relationship{
+
+						Ask:  ask,
+						Bid:  bid,
+						Last: last,
+					}
+				}
+			}
+		}
+	}
+	/*
+		preName := strings.Split(marketSummary.MarketName, "-")[0]
+		postName := strings.Split(marketSummary.MarketName, "-")[1]
+
 		if _, childIsParent := parentCoins[newChildCoinName]; childIsParent {
 			switch newParentCoinName {
 			case "BTC":
@@ -122,7 +202,8 @@ func populateCoins(marketSummaries []bittrex.MarketSummary) {
 				parentCoins[newParentCoinName].ChildCoins = append(parentCoins[newParentCoinName].ChildCoins, newChildCoinName)
 			}
 		}
-	}
+	*/
+
 }
 
 func populateCoinSummary() {
@@ -257,6 +338,20 @@ func contains(slice []string, value string) bool {
 	return false
 }
 
+func isValidRelationship(exchangeName, relationshipName string) bool {
+	output := false
+
+	switch exchangeName {
+	case "Bittrex":
+		_, isValid := validMarkets[exchangeName][relationshipName]
+		output = isValid
+	default:
+		fmt.Printf("%v is not a supported exchange. Cannot validate relationship: %v\n", exchangeName, relationshipName)
+	}
+
+	return output
+}
+
 func convert(inputCoinName string, outputCoinName string) decimal.Decimal {
 	output := decimal.NewFromFloat(0)
 
@@ -335,10 +430,21 @@ func main() {
 		for {
 			marketSummaries, err := updateMarketSummaries(bittrexClient)
 			go func() {
-				populateCoins(marketSummaries)
-				populateCoinSummary()
+				createCoins(marketSummaries)
+				populateCoins()
 
-				childCoinSlice := make([]childCoin, len(childCoins))
+				for k, v := range coins {
+					if isValidRelationship(exchangeName, k) {
+						fmt.Printf("%v\n", k)
+						for n, r := range v.Relationships {
+							fmt.Printf("\t%v : \n", n)
+							fmt.Printf("\t\tAsk : %v\n\t\tBid : %v\n\t\tLast : %v\n", r.Ask, r.Bid, r.Last)
+						}
+					}
+
+				}
+
+				/*childCoinSlice := make([]childCoin, len(childCoins))
 
 				childCoinSliceIndex := 0
 				for _, coin := range childCoins {
@@ -378,6 +484,7 @@ func main() {
 				//test buy
 				transfer("BTC", "ADA")
 				transfer("ADA", "ETH")
+				*/
 
 			}()
 			if err == nil {
