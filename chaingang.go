@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 	"time"
 
@@ -22,6 +23,15 @@ type Relationship struct {
 	Timestamp string
 }
 
+type summary struct {
+	Quantity   decimal.Decimal
+	InputCoin  string
+	OutputCoin string
+	Vessel     string
+	Direct     decimal.Decimal
+	Indirect   decimal.Decimal
+}
+
 type parentCoin struct {
 	Name       string
 	Btc        decimal.Decimal
@@ -38,6 +48,8 @@ type childCoin struct {
 	ParentCoins []string
 	Summary     summary
 }
+
+/*
 type summary struct {
 	ChildToBtc     decimal.Decimal
 	ChildToEth     decimal.Decimal
@@ -52,7 +64,7 @@ type summary struct {
 	DiffBtcPerUsdt decimal.Decimal
 	DiffEthPerUsdt decimal.Decimal
 }
-
+*/
 // Global Variables
 var (
 	transactionFee = decimal.NewFromFloat(.0025)
@@ -67,6 +79,7 @@ var (
 		},
 	}
 	exchangeName = "Bittrex"
+	summaries    map[string]map[string][]summary
 )
 
 /* ******************************************************************
@@ -142,16 +155,26 @@ func populateCoins() {
 	}
 }
 
-func testCalc() {
+func createSummaries() {
 	for marketName := range validMarkets[exchangeName] {
+		summaries[marketName] = make(map[string][]summary)
 		for otherMarketName := range validMarkets[exchangeName] {
 			if marketName != otherMarketName && marketName != "USDT" {
+				summaries[marketName][otherMarketName] = make([]summary, 0)
 				directAsk, _, _, _ := convert(marketName, otherMarketName, decimal.NewFromFloat(1))
 				fmt.Printf("Direct Ask %v -> %v : %v\n", marketName, otherMarketName, directAsk)
 				for coinName := range coins {
 					_, firstBid, _, firstConvertable := convert(marketName, coinName, decimal.NewFromFloat(1))
 					_, secondBid, _, secondConvertable := convert(coinName, otherMarketName, firstBid)
 					if firstConvertable && secondConvertable {
+						summaries[marketName][otherMarketName] = append(summaries[marketName][otherMarketName], summary{
+							Quantity:   decimal.NewFromFloat(1),
+							InputCoin:  marketName,
+							OutputCoin: otherMarketName,
+							Vessel:     coinName,
+							Direct:     directAsk,
+							Indirect:   secondBid,
+						})
 						fmt.Printf("\tIndirect %v -> %v -> %v : %v\n", marketName, coinName, otherMarketName, secondBid)
 						fmt.Printf("\t\tgain in %v :  %v\n", otherMarketName, secondBid.Add(directAsk.Neg()))
 					}
@@ -368,6 +391,7 @@ func applyTransactionFee(input decimal.Decimal) decimal.Decimal {
 }
 
 func main() {
+	summaries = make(map[string]map[string][]summary)
 	//var parentCoinNames = [...]string{"BTC", "ETH", "USDT"}
 	bittrexThreshhold := time.Duration(10) * time.Second
 	var bittrexKey, coinbaseKey, bittrexSecret string
@@ -413,7 +437,7 @@ func main() {
 					//}
 
 				}
-				testCalc()
+				createSummaries()
 
 				/*childCoinSlice := make([]childCoin, len(childCoins))
 
@@ -422,39 +446,31 @@ func main() {
 					childCoinSlice[childCoinSliceIndex] = *coin
 					childCoinSliceIndex++
 				}
-
-				sort.Slice(childCoinSlice, func(a, b int) bool {
-					var aValue, bValue float64
-					childCoinA := childCoinSlice[a]
-					childCoinB := childCoinSlice[b]
-
-					if childCoinA.Summary.DiffBtcPerUsdt.GreaterThan(childCoinA.Summary.DiffEthPerUsdt) {
-						aValue, _ = childCoinA.Summary.DiffBtcPerUsdt.Mul(decimal.NewFromFloat(10000)).Float64()
-					} else if childCoinA.Summary.DiffBtcPerUsdt.LessThan(childCoinA.Summary.DiffEthPerUsdt) {
-						aValue, _ = childCoinA.Summary.DiffEthPerUsdt.Mul(decimal.NewFromFloat(10000)).Float64()
+				*/
+				for marketName := range validMarkets[exchangeName] {
+					for otherMarketName := range validMarkets[exchangeName] {
+						sort.Slice(summaries[marketName][otherMarketName], func(aIndex, bIndex int) bool {
+							a := summaries[marketName][otherMarketName][aIndex]
+							b := summaries[marketName][otherMarketName][bIndex]
+							return (a.Direct.Add(a.Indirect.Neg())).GreaterThan(b.Indirect.Add(b.Indirect.Neg()))
+						})
 					}
+				}
+				/*
 
-					if childCoinB.Summary.DiffBtcPerUsdt.GreaterThan(childCoinB.Summary.DiffEthPerUsdt) {
-						bValue, _ = childCoinB.Summary.DiffBtcPerUsdt.Mul(decimal.NewFromFloat(10000)).Float64()
-					} else if childCoinB.Summary.DiffBtcPerUsdt.LessThan(childCoinB.Summary.DiffEthPerUsdt) {
-						bValue, _ = childCoinB.Summary.DiffEthPerUsdt.Mul(decimal.NewFromFloat(10000)).Float64()
+					for _, coin := range childCoinSlice {
+						printCoinSummary(coin.Name)
 					}
-					return aValue < bValue
-				})
+					for parentCoinName, parentCoinValue := range parentCoins {
+						fmt.Printf("%v:\n", parentCoinName)
+						fmt.Printf("\tBTC : %v\n", parentCoinValue.Btc)
+						fmt.Printf("\tETH : %v\n", parentCoinValue.Eth)
+						fmt.Printf("\tUSDT: %v\n", parentCoinValue.Usdt)
 
-				for _, coin := range childCoinSlice {
-					printCoinSummary(coin.Name)
-				}
-				for parentCoinName, parentCoinValue := range parentCoins {
-					fmt.Printf("%v:\n", parentCoinName)
-					fmt.Printf("\tBTC : %v\n", parentCoinValue.Btc)
-					fmt.Printf("\tETH : %v\n", parentCoinValue.Eth)
-					fmt.Printf("\tUSDT: %v\n", parentCoinValue.Usdt)
-
-				}
-				//test buy
-				transfer("BTC", "ADA")
-				transfer("ADA", "ETH")
+					}
+					//test buy
+					transfer("BTC", "ADA")
+					transfer("ADA", "ETH")
 				*/
 
 			}()
