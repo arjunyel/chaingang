@@ -149,10 +149,11 @@ func testCalc() {
 				directAsk, _, _, _ := convert(marketName, otherMarketName, decimal.NewFromFloat(1))
 				fmt.Printf("Direct Ask %v -> %v : %v\n", marketName, otherMarketName, directAsk)
 				for coinName := range coins {
-					first, _, _, firstConvertable := convert(marketName, coinName, decimal.NewFromFloat(1))
-					second, _, _, secondConvertable := convert(coinName, otherMarketName, first)
+					_, firstBid, _, firstConvertable := convert(marketName, coinName, decimal.NewFromFloat(1))
+					_, secondBid, _, secondConvertable := convert(coinName, otherMarketName, firstBid)
 					if firstConvertable && secondConvertable {
-						fmt.Printf("\tIndirect %v -> %v -> %v : %v\n", marketName, coinName, otherMarketName, second)
+						fmt.Printf("\tIndirect %v -> %v -> %v : %v\n", marketName, coinName, otherMarketName, secondBid)
+						fmt.Printf("\t\tgain in %v :  %v\n", otherMarketName, secondBid.Add(directAsk.Neg()))
 					}
 
 				}
