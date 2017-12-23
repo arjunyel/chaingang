@@ -24,12 +24,13 @@ type Relationship struct {
 }
 
 type summary struct {
-	Quantity   decimal.Decimal
+	Direct     decimal.Decimal
+	Gain       decimal.Decimal
+	Indirect   decimal.Decimal
 	InputCoin  string
 	OutputCoin string
+	Quantity   decimal.Decimal
 	Vessel     string
-	Direct     decimal.Decimal
-	Indirect   decimal.Decimal
 }
 
 type parentCoin struct {
@@ -124,7 +125,6 @@ func createCoins(marketSummaries []bittrex.MarketSummary) {
 }
 
 func populateCoins() {
-
 	for coinName, coinValue := range coins {
 		for marketName := range validMarkets[exchangeName] {
 			if marketName != coinName {
@@ -162,11 +162,12 @@ func createSummaries() {
 			if marketName != otherMarketName && marketName != "USDT" {
 				summaries[marketName][otherMarketName] = make([]summary, 0)
 				directAsk, _, _, _ := convert(marketName, otherMarketName, decimal.NewFromFloat(1))
-				fmt.Printf("Direct Ask %v -> %v : %v\n", marketName, otherMarketName, directAsk)
+				//	fmt.Printf("Direct Ask %v -> %v : %v\n", marketName, otherMarketName, directAsk)
 				for coinName := range coins {
 					_, firstBid, _, firstConvertable := convert(marketName, coinName, decimal.NewFromFloat(1))
 					_, secondBid, _, secondConvertable := convert(coinName, otherMarketName, firstBid)
 					if firstConvertable && secondConvertable {
+						fmt.Printf("Created summaries[%v][%v] = %v\n", marketName, otherMarketName, coinName)
 						summaries[marketName][otherMarketName] = append(summaries[marketName][otherMarketName], summary{
 							Quantity:   decimal.NewFromFloat(1),
 							InputCoin:  marketName,
@@ -174,11 +175,40 @@ func createSummaries() {
 							Vessel:     coinName,
 							Direct:     directAsk,
 							Indirect:   secondBid,
+							Gain:       secondBid.Add(directAsk.Neg()),
 						})
-						fmt.Printf("\tIndirect %v -> %v -> %v : %v\n", marketName, coinName, otherMarketName, secondBid)
-						fmt.Printf("\t\tgain in %v :  %v\n", otherMarketName, secondBid.Add(directAsk.Neg()))
+						fmt.Printf("new length : %v \n", len(summaries[marketName][otherMarketName]))
+						//			fmt.Printf("\tIndirect %v -> %v -> %v : %v\n", marketName, coinName, otherMarketName, secondBid)
+						//			fmt.Printf("\t\tgain in %v :  %v\n", otherMarketName, secondBid.Add(directAsk.Neg()))
 					}
 
+				}
+			}
+		}
+	}
+}
+
+func sortSummaries() {
+	for marketName := range validMarkets[exchangeName] {
+		for otherMarketName := range validMarkets[exchangeName] {
+			sort.Slice(summaries[marketName][otherMarketName], func(aIndex, bIndex int) bool {
+				a := summaries[marketName][otherMarketName][aIndex]
+				b := summaries[marketName][otherMarketName][bIndex]
+				return (b.Gain).GreaterThan(a.Gain)
+			})
+		}
+	}
+}
+
+func printSummaries() {
+	for marketName := range summaries {
+		for otherMarketName := range summaries[marketName] {
+			if marketName != otherMarketName && marketName != "USDT" {
+				directAsk, _, _, _ := convert(marketName, otherMarketName, decimal.NewFromFloat(1))
+				fmt.Printf("Direct Ask %v -> %v : %v\n", marketName, otherMarketName, directAsk)
+				for _, summaryValue := range summaries[marketName][otherMarketName] {
+					_, _, last, _ := convert(otherMarketName, "USDT", summaryValue.Gain)
+					fmt.Printf("\tIndirect %v -> %v ->%v : %v\n\t\tGain : %v\n\t\tIn USDT : %v\n", marketName, summaryValue.Vessel, otherMarketName, summaryValue.Indirect, summaryValue.Gain, last)
 				}
 			}
 		}
@@ -438,7 +468,8 @@ func main() {
 
 				}
 				createSummaries()
-
+				sortSummaries()
+				printSummaries()
 				/*childCoinSlice := make([]childCoin, len(childCoins))
 
 				childCoinSliceIndex := 0
@@ -447,15 +478,7 @@ func main() {
 					childCoinSliceIndex++
 				}
 				*/
-				for marketName := range validMarkets[exchangeName] {
-					for otherMarketName := range validMarkets[exchangeName] {
-						sort.Slice(summaries[marketName][otherMarketName], func(aIndex, bIndex int) bool {
-							a := summaries[marketName][otherMarketName][aIndex]
-							b := summaries[marketName][otherMarketName][bIndex]
-							return (a.Direct.Add(a.Indirect.Neg())).GreaterThan(b.Indirect.Add(b.Indirect.Neg()))
-						})
-					}
-				}
+
 				/*
 
 					for _, coin := range childCoinSlice {
