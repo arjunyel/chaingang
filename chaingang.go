@@ -5,11 +5,17 @@ import (
 	"os"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/shopspring/decimal"
-	"github.com/toorop/go-bittrex"
+	bittrex "github.com/toorop/go-bittrex"
 )
+
+type balances struct {
+	lock     sync.RWMutex
+	balances map[string]decimal.Decimal
+}
 
 type Coin struct {
 	Name          string
@@ -68,6 +74,10 @@ type summary struct {
 */
 // Global Variables
 var (
+	acctBalance = &balances{
+		lock:     sync.RWMutex{},
+		balances: make(map[string]decimal.Decimal),
+	}
 	transactionFee = decimal.NewFromFloat(.0025)
 	parentCoins    = map[string]*parentCoin{}
 	childCoins     = map[string]*childCoin{}
@@ -89,6 +99,22 @@ var (
 func updateMarketSummaries(bittrexClient *bittrex.Bittrex) ([]bittrex.MarketSummary, error) {
 	marketSummaries, err := bittrexClient.GetMarketSummaries()
 	return marketSummaries, err
+}
+
+func (b *balances) updateAccountBalances(bittrexClient *bittrex.Bittrex) error {
+	balances, err := bittrexClient.GetBalances()
+	if err != nil {
+		return err
+	}
+	zero := decimal.NewFromFloat(0.0)
+	b.lock.Lock()
+	for _, bal := range balances {
+		if bal.Available.GreaterThan(zero) {
+			b.balances[bal.Currency] = bal.Available
+		}
+	}
+	b.lock.Unlock()
+	return nil
 }
 
 /* ******************************************************************
@@ -339,6 +365,15 @@ func printCoinSummary(childCoinName string) {
 /* ***************************************************************************************
  * Utils
  * **************************************************************************************/
+
+func (b *balances) printBalances() {
+	b.lock.RLock()
+	for bal := range b.balances {
+		fmt.Println(bal + " - " + b.balances[bal].String())
+	}
+	b.lock.RUnlock()
+}
+
 func contains(slice []string, value string) bool {
 	for _, a := range slice {
 		if a == value {
@@ -470,6 +505,13 @@ func main() {
 				createSummaries()
 				sortSummaries()
 				printSummaries()
+				err := acctBalance.updateAccountBalances(bittrexClient)
+				if err != nil {
+					fmt.Println(err)
+					return
+				}
+				acctBalance.printBalances()
+
 				/*childCoinSlice := make([]childCoin, len(childCoins))
 
 				childCoinSliceIndex := 0
