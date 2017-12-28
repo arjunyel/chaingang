@@ -126,16 +126,19 @@ func createCoins(marketSummaries []bittrex.MarketSummary) {
 		coinName := strings.Split(marketSummary.MarketName, "-")[1]
 
 		_, coinExists := coins[coinName]
-		if !coinExists {
-			coins[coinName] = &Coin{
-				Name:          coinName,
-				Relationships: make(map[string]Relationship),
+		zero := decimal.NewFromFloat(0.0)
+		if !marketSummary.Ask.Equal(zero) && !marketSummary.Bid.Equal(zero) && !marketSummary.Last.Equal(zero) {
+			if !coinExists {
+				coins[coinName] = &Coin{
+					Name:          coinName,
+					Relationships: make(map[string]Relationship),
+				}
 			}
-		}
-		coins[coinName].Relationships[relationshipName] = Relationship{
-			Ask:  marketSummary.Ask,
-			Bid:  marketSummary.Bid,
-			Last: marketSummary.Last,
+			coins[coinName].Relationships[relationshipName] = Relationship{
+				Ask:  marketSummary.Ask,
+				Bid:  marketSummary.Bid,
+				Last: marketSummary.Last,
+			}
 		}
 	}
 
