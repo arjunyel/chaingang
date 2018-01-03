@@ -193,22 +193,19 @@ func createSummaries() {
 				directAsk, _, _, _ := convert(marketName, otherMarketName, decimal.NewFromFloat(1))
 				//	fmt.Printf("Direct Ask %v -> %v : %v\n", marketName, otherMarketName, directAsk)
 				for coinName := range coins {
-					_, firstBid, _, firstConvertable := convert(marketName, coinName, decimal.NewFromFloat(1))
-					_, secondBid, _, secondConvertable := convert(coinName, otherMarketName, firstBid)
-					if firstConvertable && secondConvertable {
-						fmt.Printf("Created summaries[%v][%v] = %v\n", marketName, otherMarketName, coinName)
+					_, marketToCoinBid, _, marketToCoinConvertable := convert(marketName, coinName, decimal.NewFromFloat(1))
+					coinToOtherAsk, _, _, coinToOtherConvertable := convert(coinName, otherMarketName, marketToCoinBid)
+					_, otherToMarketBid, _, otherToMarketConvertable := convert(otherMarketName, marketName, coinToOtherAsk)
+					if marketToCoinConvertable && coinToOtherConvertable && otherToMarketConvertable {
 						summaries[marketName][otherMarketName] = append(summaries[marketName][otherMarketName], summary{
 							Quantity:   decimal.NewFromFloat(1),
 							InputCoin:  marketName,
 							OutputCoin: otherMarketName,
 							Vessel:     coinName,
 							Direct:     directAsk,
-							Indirect:   secondBid,
-							Gain:       secondBid.Add(directAsk.Neg()),
+							Indirect:   otherToMarketBid,
+							Gain:       otherToMarketBid.Add(decimal.NewFromFloat(1).Neg()),
 						})
-						fmt.Printf("new length : %v \n", len(summaries[marketName][otherMarketName]))
-						//			fmt.Printf("\tIndirect %v -> %v -> %v : %v\n", marketName, coinName, otherMarketName, secondBid)
-						//			fmt.Printf("\t\tgain in %v :  %v\n", otherMarketName, secondBid.Add(directAsk.Neg()))
 					}
 
 				}
@@ -229,19 +226,54 @@ func sortSummaries() {
 	}
 }
 
-func printSummaries() {
-	for marketName := range summaries {
-		for otherMarketName := range summaries[marketName] {
+func orderedByGains() []string {
+	output := make([]string, 0)
+
+	for marketName := range validMarkets[exchangeName] {
+		for otherMarketName := range validMarkets[exchangeName] {
 			if marketName != otherMarketName && marketName != "USDT" {
-				directAsk, _, _, _ := convert(marketName, otherMarketName, decimal.NewFromFloat(1))
-				fmt.Printf("Direct Ask %v -> %v : %v\n", marketName, otherMarketName, directAsk)
-				for _, summaryValue := range summaries[marketName][otherMarketName] {
-					_, _, last, _ := convert(otherMarketName, "USDT", summaryValue.Gain)
-					fmt.Printf("\tIndirect %v -> %v ->%v : %v\n\t\tGain : %v\n\t\tIn USDT : %v\n", marketName, summaryValue.Vessel, otherMarketName, summaryValue.Indirect, summaryValue.Gain, last)
-				}
+				output = append(output, marketName+"-"+otherMarketName)
 			}
 		}
 	}
+
+	sort.Slice(output, func(aIndex, bIndex int) bool {
+		aSplit := strings.Split(output[aIndex], "-")
+		bSplit := strings.Split(output[bIndex], "-")
+		a := summaries[aSplit[0]][aSplit[1]]
+		b := summaries[bSplit[0]][bSplit[1]]
+		return (b[len(b)-1].Gain).GreaterThan(a[len(a)-1].Gain)
+	})
+	return output
+}
+
+func printSummaries() {
+	for _, marketRelationship := range orderedByGains() {
+		marketRelationSplit := strings.Split(marketRelationship, "-")
+		marketName := marketRelationSplit[0]
+		otherMarketName := marketRelationSplit[1]
+		if marketName != otherMarketName && marketName != "USDT" {
+			//				directAsk, _, _, _ := convert(marketName, otherMarketName, decimal.NewFromFloat(1))
+			fmt.Printf("Market : %v at 1.00 \n", marketName)
+			for _, summaryValue := range summaries[marketName][otherMarketName] {
+				_, _, last, _ := convert(otherMarketName, "USDT", summaryValue.Gain)
+				fmt.Printf("\tIndirect %v -> %v -> %v -> %v : %v\n\t\tGain : %v\n\t\tIn USDT : %v\n", marketName, summaryValue.Vessel, otherMarketName, marketName, summaryValue.Indirect, summaryValue.Gain, last)
+			}
+		}
+
+	}
+	//for marketName := range summaries {
+	//	for otherMarketName := range summaries[marketName] {
+	//		if marketName != otherMarketName && marketName != "USDT" {
+	//			//				directAsk, _, _, _ := convert(marketName, otherMarketName, decimal.NewFromFloat(1))
+	//			fmt.Printf("Market : %v at 1.00 \n", marketName)
+	//			for _, summaryValue := range summaries[marketName][otherMarketName] {
+	//				_, _, last, _ := convert(otherMarketName, "USDT", summaryValue.Gain)
+	//				fmt.Printf("\tIndirect %v -> %v -> %v -> %v : %v\n\t\tGain : %v\n\t\tIn USDT : %v\n", marketName, summaryValue.Vessel, otherMarketName, marketName, summaryValue.Indirect, summaryValue.Gain, last)
+	//			}
+	//		}
+	//	}
+	//}
 }
 
 /*
