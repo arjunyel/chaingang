@@ -82,11 +82,11 @@ var (
 	parentCoins    = map[string]*parentCoin{}
 	childCoins     = map[string]*childCoin{}
 	coins          = map[string]*Coin{}
-	validOrigins   = map[string]map[string]bool{
-		"Bittrex": map[string]bool{
-			"BTC":  true,
-			"ETH":  true,
-			"USDT": true,
+	validOrigins   = map[string]map[string]decimal.Decimal{
+		"Bittrex": map[string]decimal.Decimal{
+			"BTC":  decimal.NewFromFloat(0.0072),
+			"ETH":  decimal.NewFromFloat(0.00071),
+			"USDT": decimal.NewFromFloat(100),
 		},
 	}
 	exchangeName = "Bittrex"
@@ -185,30 +185,45 @@ func populateCoins() {
 	}
 }
 
-func createSummaries() {
-	for originName := range validOrigins[exchangeName] {
-		summaries[originName] = make(map[string][]summary)
-		for otherOriginName := range validOrigins[exchangeName] {
-			if originName != otherOriginName && originName != "USDT" {
-				summaries[originName][otherOriginName] = make([]summary, 0)
-				directAsk, _, _, _ := convert(originName, otherOriginName, decimal.NewFromFloat(1))
-				//	fmt.Printf("Direct Ask %v -> %v : %v\n", marketName, otherMarketName, directAsk)
-				for coinName := range coins {
-					_, marketToCoinBid, _, marketToCoinConvertable := convert(originName, coinName, decimal.NewFromFloat(1))
-					coinToOtherAsk, _, _, coinToOtherConvertable := convert(coinName, otherOriginName, marketToCoinBid)
-					_, otherToMarketBid, _, otherToMarketConvertable := convert(otherOriginName, originName, coinToOtherAsk)
-					if marketToCoinConvertable && coinToOtherConvertable && otherToMarketConvertable {
-						summaries[originName][otherOriginName] = append(summaries[originName][otherOriginName], summary{
-							Quantity:   decimal.NewFromFloat(1),
-							InputCoin:  originName,
-							OutputCoin: otherOriginName,
-							Vessel:     coinName,
-							Direct:     directAsk,
-							Indirect:   otherToMarketBid,
-							Gain:       otherToMarketBid.Add(decimal.NewFromFloat(1).Neg()),
-						})
-					}
+func createSummaries(bittrexClient *bittrex.Bittrex) {
 
+	err := acctBalance.updateAccountBalances(bittrexClient)
+	if err != nil {
+		fmt.Println(err)
+		return
+	} else {
+		for originName := range validOrigins[exchangeName] {
+			availableOrigin, accHasOrigin := acctBalance.get(originName)
+			maxOriginStake := validOrigins[exchangeName][originName]
+			originStake := maxOriginStake
+			if originStake.GreaterThan(availableOrigin) {
+				originStake = availableOrigin
+			}
+			if accHasOrigin {
+				summaries[originName] = make(map[string][]summary)
+				for otherOriginName := range validOrigins[exchangeName] {
+					if originName != otherOriginName && originName != "USDT" {
+						summaries[originName][otherOriginName] = make([]summary, 0)
+						directAsk, _, _, _ := convert(originName, otherOriginName, originStake)
+						//	fmt.Printf("Direct Ask %v -> %v : %v\n", marketName, otherMarketName, directAsk)
+						for coinName := range coins {
+							_, marketToCoinBid, _, marketToCoinConvertable := convert(originName, coinName, originStake)
+							coinToOtherAsk, _, _, coinToOtherConvertable := convert(coinName, otherOriginName, marketToCoinBid)
+							_, otherToMarketBid, _, otherToMarketConvertable := convert(otherOriginName, originName, coinToOtherAsk)
+							if marketToCoinConvertable && coinToOtherConvertable && otherToMarketConvertable {
+								summaries[originName][otherOriginName] = append(summaries[originName][otherOriginName], summary{
+									Quantity:   originStake,
+									InputCoin:  originName,
+									OutputCoin: otherOriginName,
+									Vessel:     coinName,
+									Direct:     directAsk,
+									Indirect:   otherToMarketBid,
+									Gain:       otherToMarketBid.Add(originStake.Neg()),
+								})
+							}
+
+						}
+					}
 				}
 			}
 		}
@@ -255,7 +270,7 @@ func printSummaries() {
 		otherOriginName := marketRelationSplit[1]
 		if originName != otherOriginName && originName != "USDT" {
 			//				directAsk, _, _, _ := convert(marketName, otherMarketName, decimal.NewFromFloat(1))
-			fmt.Printf("Market : %v at 1.00 \n", originName)
+			fmt.Printf("Origin : %v at %v \n", originName, validOrigins[exchangeName][originName])
 			for _, summaryValue := range summaries[originName][otherOriginName] {
 				_, _, last, _ := convert(originName, "USDT", summaryValue.Gain)
 				fmt.Printf("\tIndirect %v -> %v -> %v -> %v : %v\n\t\tGain : %v\n\t\tIn USDT : %v\n", originName, summaryValue.Vessel, otherOriginName, originName, summaryValue.Indirect, summaryValue.Gain, last)
@@ -393,6 +408,13 @@ func (b *balances) printBalances() {
 	b.lock.RUnlock()
 }
 
+func (b *balances) get(key string) (decimal.Decimal, bool) {
+	b.lock.RLock()
+	balance, exists := b.balances[key]
+	b.lock.RUnlock()
+	return balance, exists
+}
+
 func contains(slice []string, value string) bool {
 	for _, a := range slice {
 		if a == value {
@@ -505,14 +527,10 @@ func main() {
 			go func() {
 				createCoins(marketSummaries)
 				populateCoins()
-				createSummaries()
+				createSummaries(bittrexClient)
 				sortSummaries()
 				printSummaries()
-				err := acctBalance.updateAccountBalances(bittrexClient)
-				if err != nil {
-					fmt.Println(err)
-					return
-				}
+
 				acctBalance.printBalances()
 			}()
 			if err == nil {
