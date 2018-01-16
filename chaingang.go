@@ -82,7 +82,7 @@ var (
 	parentCoins    = map[string]*parentCoin{}
 	childCoins     = map[string]*childCoin{}
 	coins          = map[string]*Coin{}
-	validMarkets   = map[string]map[string]bool{
+	validOrigins   = map[string]map[string]bool{
 		"Bittrex": map[string]bool{
 			"BTC":  true,
 			"ETH":  true,
@@ -142,11 +142,11 @@ func createCoins(marketSummaries []bittrex.MarketSummary) {
 		}
 	}
 
-	for marketName := range validMarkets[exchangeName] {
-		_, marketHasCoin := coins[marketName]
+	for originName := range validOrigins[exchangeName] {
+		_, marketHasCoin := coins[originName]
 		if !marketHasCoin {
-			coins[marketName] = &Coin{
-				Name:          marketName,
+			coins[originName] = &Coin{
+				Name:          originName,
 				Relationships: make(map[string]Relationship),
 			}
 		}
@@ -155,24 +155,24 @@ func createCoins(marketSummaries []bittrex.MarketSummary) {
 
 func populateCoins() {
 	for coinName, coinValue := range coins {
-		for marketName := range validMarkets[exchangeName] {
-			if marketName != coinName {
-				_, hasRelationship := coinValue.Relationships[marketName]
+		for originName := range validOrigins[exchangeName] {
+			if originName != coinName {
+				_, hasRelationship := coinValue.Relationships[originName]
 				if !hasRelationship && isValidRelationship(exchangeName, coinName) {
-					fmt.Printf("%v : %v\n", coinName, marketName)
+					fmt.Printf("%v : %v\n", coinName, originName)
 					ask := decimal.NewFromFloat(0)
 					bid := decimal.NewFromFloat(0)
 					last := decimal.NewFromFloat(0)
-					if coins[marketName].Relationships[coinName].Ask != decimal.NewFromFloat(0) {
-						ask = decimal.NewFromFloat(1).Div(coins[marketName].Relationships[coinName].Ask)
+					if coins[originName].Relationships[coinName].Ask != decimal.NewFromFloat(0) {
+						ask = decimal.NewFromFloat(1).Div(coins[originName].Relationships[coinName].Ask)
 					}
-					if coins[marketName].Relationships[coinName].Bid != decimal.NewFromFloat(0) {
-						bid = decimal.NewFromFloat(1).Div(coins[marketName].Relationships[coinName].Bid)
+					if coins[originName].Relationships[coinName].Bid != decimal.NewFromFloat(0) {
+						bid = decimal.NewFromFloat(1).Div(coins[originName].Relationships[coinName].Bid)
 					}
-					if coins[marketName].Relationships[coinName].Last != decimal.NewFromFloat(0) {
-						last = decimal.NewFromFloat(1).Div(coins[marketName].Relationships[coinName].Last)
+					if coins[originName].Relationships[coinName].Last != decimal.NewFromFloat(0) {
+						last = decimal.NewFromFloat(1).Div(coins[originName].Relationships[coinName].Last)
 					}
-					coinValue.Relationships[marketName] = Relationship{
+					coinValue.Relationships[originName] = Relationship{
 
 						Ask:  ask,
 						Bid:  bid,
@@ -185,22 +185,22 @@ func populateCoins() {
 }
 
 func createSummaries() {
-	for marketName := range validMarkets[exchangeName] {
-		summaries[marketName] = make(map[string][]summary)
-		for otherMarketName := range validMarkets[exchangeName] {
-			if marketName != otherMarketName && marketName != "USDT" {
-				summaries[marketName][otherMarketName] = make([]summary, 0)
-				directAsk, _, _, _ := convert(marketName, otherMarketName, decimal.NewFromFloat(1))
+	for originName := range validOrigins[exchangeName] {
+		summaries[originName] = make(map[string][]summary)
+		for otherOriginName := range validOrigins[exchangeName] {
+			if originName != otherOriginName && originName != "USDT" {
+				summaries[originName][otherOriginName] = make([]summary, 0)
+				directAsk, _, _, _ := convert(originName, otherOriginName, decimal.NewFromFloat(1))
 				//	fmt.Printf("Direct Ask %v -> %v : %v\n", marketName, otherMarketName, directAsk)
 				for coinName := range coins {
-					_, marketToCoinBid, _, marketToCoinConvertable := convert(marketName, coinName, decimal.NewFromFloat(1))
-					coinToOtherAsk, _, _, coinToOtherConvertable := convert(coinName, otherMarketName, marketToCoinBid)
-					_, otherToMarketBid, _, otherToMarketConvertable := convert(otherMarketName, marketName, coinToOtherAsk)
+					_, marketToCoinBid, _, marketToCoinConvertable := convert(originName, coinName, decimal.NewFromFloat(1))
+					coinToOtherAsk, _, _, coinToOtherConvertable := convert(coinName, otherOriginName, marketToCoinBid)
+					_, otherToMarketBid, _, otherToMarketConvertable := convert(otherOriginName, originName, coinToOtherAsk)
 					if marketToCoinConvertable && coinToOtherConvertable && otherToMarketConvertable {
-						summaries[marketName][otherMarketName] = append(summaries[marketName][otherMarketName], summary{
+						summaries[originName][otherOriginName] = append(summaries[originName][otherOriginName], summary{
 							Quantity:   decimal.NewFromFloat(1),
-							InputCoin:  marketName,
-							OutputCoin: otherMarketName,
+							InputCoin:  originName,
+							OutputCoin: otherOriginName,
 							Vessel:     coinName,
 							Direct:     directAsk,
 							Indirect:   otherToMarketBid,
@@ -215,11 +215,11 @@ func createSummaries() {
 }
 
 func sortSummaries() {
-	for marketName := range validMarkets[exchangeName] {
-		for otherMarketName := range validMarkets[exchangeName] {
-			sort.Slice(summaries[marketName][otherMarketName], func(aIndex, bIndex int) bool {
-				a := summaries[marketName][otherMarketName][aIndex]
-				b := summaries[marketName][otherMarketName][bIndex]
+	for originName := range validOrigins[exchangeName] {
+		for otherOriginName := range validOrigins[exchangeName] {
+			sort.Slice(summaries[originName][otherOriginName], func(aIndex, bIndex int) bool {
+				a := summaries[originName][otherOriginName][aIndex]
+				b := summaries[originName][otherOriginName][bIndex]
 				return (b.Gain).GreaterThan(a.Gain)
 			})
 		}
@@ -229,10 +229,10 @@ func sortSummaries() {
 func orderedByGains() []string {
 	output := make([]string, 0)
 
-	for marketName := range validMarkets[exchangeName] {
-		for otherMarketName := range validMarkets[exchangeName] {
-			if marketName != otherMarketName && marketName != "USDT" {
-				output = append(output, marketName+"-"+otherMarketName)
+	for originName := range validOrigins[exchangeName] {
+		for otherOriginName := range validOrigins[exchangeName] {
+			if originName != otherOriginName && originName != "USDT" {
+				output = append(output, originName+"-"+otherOriginName)
 			}
 		}
 	}
@@ -250,14 +250,14 @@ func orderedByGains() []string {
 func printSummaries() {
 	for _, marketRelationship := range orderedByGains() {
 		marketRelationSplit := strings.Split(marketRelationship, "-")
-		marketName := marketRelationSplit[0]
-		otherMarketName := marketRelationSplit[1]
-		if marketName != otherMarketName && marketName != "USDT" {
+		originName := marketRelationSplit[0]
+		otherOriginName := marketRelationSplit[1]
+		if originName != otherOriginName && originName != "USDT" {
 			//				directAsk, _, _, _ := convert(marketName, otherMarketName, decimal.NewFromFloat(1))
-			fmt.Printf("Market : %v at 1.00 \n", marketName)
-			for _, summaryValue := range summaries[marketName][otherMarketName] {
-				_, _, last, _ := convert(otherMarketName, "USDT", summaryValue.Gain)
-				fmt.Printf("\tIndirect %v -> %v -> %v -> %v : %v\n\t\tGain : %v\n\t\tIn USDT : %v\n", marketName, summaryValue.Vessel, otherMarketName, marketName, summaryValue.Indirect, summaryValue.Gain, last)
+			fmt.Printf("Market : %v at 1.00 \n", originName)
+			for _, summaryValue := range summaries[originName][otherOriginName] {
+				_, _, last, _ := convert(otherOriginName, "USDT", summaryValue.Gain)
+				fmt.Printf("\tIndirect %v -> %v -> %v -> %v : %v\n\t\tGain : %v\n\t\tIn USDT : %v\n", originName, summaryValue.Vessel, otherOriginName, originName, summaryValue.Indirect, summaryValue.Gain, last)
 			}
 		}
 
@@ -276,31 +276,10 @@ func printSummaries() {
 	//}
 }
 
-/*
-func populateCoinSummary() {
-	for childCoinName, childCoinValue := range childCoins {
-		_, childIsParent := parentCoins[childCoinName]
-		if len(childCoinValue.ParentCoins) == 2 && !childIsParent {
-			childCoins[childCoinName].Summary.ChildToBtc = convert(childCoinName, "BTC")
-			childCoins[childCoinName].Summary.ChildToEth = convert(childCoinName, "ETH")
-			childCoins[childCoinName].Summary.IndirectToEth = convert("BTC", childCoinName).Mul(convert(childCoinName, "ETH"))
-			childCoins[childCoinName].Summary.IndirectToBtc = convert("ETH", childCoinName).Mul(convert(childCoinName, "BTC"))
-			childCoins[childCoinName].Summary.DirectToEth = convert("BTC", "ETH")
-			childCoins[childCoinName].Summary.DirectToBtc = convert("ETH", "BTC")
-			childCoins[childCoinName].Summary.DiffEth = childCoins[childCoinName].Summary.IndirectToEth.Add(childCoins[childCoinName].Summary.DirectToEth.Neg())
-			childCoins[childCoinName].Summary.DiffBtc = childCoins[childCoinName].Summary.IndirectToBtc.Add(childCoins[childCoinName].Summary.DirectToBtc.Neg())
-			childCoins[childCoinName].Summary.DiffEthUsdt = convert("ETH", "USDT").Mul(childCoins[childCoinName].Summary.DiffEth)
-			childCoins[childCoinName].Summary.DiffBtcUsdt = convert("BTC", "USDT").Mul(childCoins[childCoinName].Summary.DiffBtc)
-			childCoins[childCoinName].Summary.DiffBtcPerUsdt = childCoins[childCoinName].Summary.DiffBtcUsdt.Div(convert("BTC", "USDT"))
-			childCoins[childCoinName].Summary.DiffEthPerUsdt = childCoins[childCoinName].Summary.DiffEthUsdt.Div(convert("ETH", "USDT"))
-		}
-	}
-}*/
-
 /* ************************************************************************************************
  * Trading
  * ***********************************************************************************************/
-/*
+
 func transfer(inputCoinName string, outputCoinName string) {
 	_, inputIsParentCoin := parentCoins[inputCoinName]
 	_, outputIsParentCoin := parentCoins[outputCoinName]
@@ -362,7 +341,11 @@ func transfer(inputCoinName string, outputCoinName string) {
 	}
 	fmt.Printf("%v:\n\tmarket : %v\n\tquantity : %v\n\trate : %v\n", transferType, market, quantity, rate)
 }
-*/
+
+func transferBittrex(inputCoin string, outputCoin string) {
+
+}
+
 /* ****************************************************************************************
  * Display
  * ***************************************************************************************/
@@ -423,7 +406,7 @@ func isValidRelationship(exchangeName, relationshipName string) bool {
 
 	switch exchangeName {
 	case "Bittrex":
-		_, isValid := validMarkets[exchangeName][relationshipName]
+		_, isValid := validOrigins[exchangeName][relationshipName]
 		output = isValid
 	default:
 		fmt.Printf("%v is not a supported exchange. Cannot validate relationship: %v\n", exchangeName, relationshipName)
