@@ -104,6 +104,7 @@ func updateMarketSummaries(bittrexClient *bittrex.Bittrex) ([]bittrex.MarketSumm
 func (b *balances) updateAccountBalances(bittrexClient *bittrex.Bittrex) error {
 	balances, err := bittrexClient.GetBalances()
 	if err != nil {
+
 		return err
 	}
 	zero := decimal.NewFromFloat(0.0)
@@ -256,7 +257,7 @@ func printSummaries() {
 			//				directAsk, _, _, _ := convert(marketName, otherMarketName, decimal.NewFromFloat(1))
 			fmt.Printf("Market : %v at 1.00 \n", originName)
 			for _, summaryValue := range summaries[originName][otherOriginName] {
-				_, _, last, _ := convert(otherOriginName, "USDT", summaryValue.Gain)
+				_, _, last, _ := convert(originName, "USDT", summaryValue.Gain)
 				fmt.Printf("\tIndirect %v -> %v -> %v -> %v : %v\n\t\tGain : %v\n\t\tIn USDT : %v\n", originName, summaryValue.Vessel, otherOriginName, originName, summaryValue.Indirect, summaryValue.Gain, last)
 			}
 		}
