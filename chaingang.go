@@ -85,7 +85,7 @@ var (
 	validOrigins   = map[string]map[string]decimal.Decimal{
 		"Bittrex": map[string]decimal.Decimal{
 			"BTC":  decimal.NewFromFloat(0.0072),
-			"ETH":  decimal.NewFromFloat(0.00071),
+			"ETH":  decimal.NewFromFloat(0.072),
 			"USDT": decimal.NewFromFloat(100),
 		},
 	}
