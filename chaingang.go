@@ -504,22 +504,6 @@ func main() {
 			go func() {
 				createCoins(marketSummaries)
 				populateCoins()
-
-				for k, v := range coins {
-					//if isValidRelationship(exchangeName, k) {
-					fmt.Printf("%v\n", k)
-					for n, r := range v.Relationships {
-						fmt.Printf("\t%v : \n", n)
-						fmt.Printf("\t\tAsk : %v\n\t\tBid : %v\n\t\tLast : %v\n", r.Ask, r.Bid, r.Last)
-						askV, _, _, convertable := convert(n, k, decimal.NewFromFloat(1))
-						if convertable {
-							fmt.Printf("\t\t\t%v -> %v : %v\n", n, k, askV)
-						}
-
-					}
-					//}
-
-				}
 				createSummaries()
 				sortSummaries()
 				printSummaries()
@@ -529,33 +513,6 @@ func main() {
 					return
 				}
 				acctBalance.printBalances()
-
-				/*childCoinSlice := make([]childCoin, len(childCoins))
-
-				childCoinSliceIndex := 0
-				for _, coin := range childCoins {
-					childCoinSlice[childCoinSliceIndex] = *coin
-					childCoinSliceIndex++
-				}
-				*/
-
-				/*
-
-					for _, coin := range childCoinSlice {
-						printCoinSummary(coin.Name)
-					}
-					for parentCoinName, parentCoinValue := range parentCoins {
-						fmt.Printf("%v:\n", parentCoinName)
-						fmt.Printf("\tBTC : %v\n", parentCoinValue.Btc)
-						fmt.Printf("\tETH : %v\n", parentCoinValue.Eth)
-						fmt.Printf("\tUSDT: %v\n", parentCoinValue.Usdt)
-
-					}
-					//test buy
-					transfer("BTC", "ADA")
-					transfer("ADA", "ETH")
-				*/
-
 			}()
 			if err == nil {
 
