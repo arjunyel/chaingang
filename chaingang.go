@@ -303,10 +303,11 @@ func printSummaries() {
  * Trading
  * ***********************************************************************************************/
 
-func transfer(inputCoinName string, outputCoinName string, quantity decimal.Decimal) {
+func transfer(inputCoinName string, outputCoinName string, quantity decimal.Decimal) decimal.Decimal {
 	var limitType string
 	var market string
 	var rate decimal.Decimal
+	var output decimal.Decimal
 	relationship, relationshipExists := coins[outputCoinName].Relationships[inputCoinName]
 
 	if relationshipExists {
@@ -319,8 +320,9 @@ func transfer(inputCoinName string, outputCoinName string, quantity decimal.Deci
 		relationship := coins[inputCoinName].Relationships[outputCoinName]
 		rate = decimal.NewFromFloat(1).Div(relationship.Ask)
 	}
-
+	output = quantity.Div(rate)
 	fmt.Printf("%v : \n\tin: %v \n\tout: %v \n\ttype: %v \n\tquantity: %v \n\trate: %v\n", market, inputCoinName, outputCoinName, limitType, quantity, rate)
+	return output
 }
 
 /* ****************************************************************************************
@@ -463,9 +465,11 @@ func main() {
 				createSummaries(bittrexClient)
 				sortSummaries()
 				printSummaries()
-				transfer("BTC", "ADA", decimal.NewFromFloat(1))
-				transfer("ADA", "ETH", decimal.NewFromFloat(1))
-				transfer("ETH", "BTC", decimal.NewFromFloat(1))
+				round1 := transfer("BTC", "ADA", decimal.NewFromFloat(100))
+				round2 := transfer("ADA", "ETH", round1)
+				round3 := transfer("ETH", "BTC", round2)
+
+				fmt.Printf("end : %v", round3)
 
 				acctBalance.printBalances()
 			}()
