@@ -89,6 +89,13 @@ var (
 			"USDT": decimal.NewFromFloat(100),
 		},
 	}
+	validMarkets = map[string]map[string]bool{
+		"Bittrex": map[string]bool{
+			"BTC-ETH":  true,
+			"USDT-BTC": true,
+			"USDT-ETH": true,
+		},
+	}
 	exchangeName = "Bittrex"
 	summaries    map[string]map[string][]summary
 )
@@ -296,70 +303,24 @@ func printSummaries() {
  * Trading
  * ***********************************************************************************************/
 
-func transfer(inputCoinName string, outputCoinName string) {
-	_, inputIsParentCoin := parentCoins[inputCoinName]
-	_, outputIsParentCoin := parentCoins[outputCoinName]
-
+func transfer(inputCoinName string, outputCoinName string, quantity decimal.Decimal) {
+	var limitType string
 	var market string
-	var quantity decimal.Decimal
 	var rate decimal.Decimal
-	var transferType string
-	if inputIsParentCoin && outputIsParentCoin {
-		switch inputCoinName {
-		case "ETH":
-			market = getMarketName(outputCoinName, inputCoinName)
-			transferType = "sell"
-			switch outputCoinName {
-			case "BTC":
-				rate = parentCoins[inputCoinName].Btc
-			case "USDT":
-				rate = parentCoins[outputCoinName].Eth
-			}
-		case "BTC":
-			switch outputCoinName {
-			case "ETH":
-				market = getMarketName(inputCoinName, outputCoinName)
-				transferType = "buy"
-				rate = parentCoins[outputCoinName].Btc
-			case "USDT":
-				market = getMarketName(outputCoinName, inputCoinName)
-				transferType = "sell"
-				rate = parentCoins[outputCoinName].Btc
-			}
-		case "USDT":
-			market = getMarketName(inputCoinName, outputCoinName)
-			transferType = "buy"
-			switch outputCoinName {
-			case "ETH":
-				rate = parentCoins[inputCoinName].Eth
-			case "BTC":
-				rate = parentCoins[inputCoinName].Btc
-			}
-		}
-	} else if inputIsParentCoin && !outputIsParentCoin {
-		market = getMarketName(inputCoinName, outputCoinName)
-		transferType = "buy"
-		switch inputCoinName {
-		case "BTC":
-			rate = childCoins[outputCoinName].Btc
-		case "ETH":
-			rate = childCoins[outputCoinName].Eth
-		}
-	} else if !inputIsParentCoin && outputIsParentCoin {
-		market = getMarketName(outputCoinName, inputCoinName)
-		transferType = "sell"
-		switch outputCoinName {
-		case "BTC":
-			rate = childCoins[inputCoinName].Btc
-		case "ETH":
-			rate = childCoins[inputCoinName].Eth
-		}
+	relationship, relationshipExists := coins[outputCoinName].Relationships[inputCoinName]
+
+	if relationshipExists {
+		market = inputCoinName + "-" + outputCoinName
+		limitType = "buy"
+		rate = relationship.Bid
+	} else {
+		market = outputCoinName + "-" + inputCoinName
+		limitType = "sell"
+		relationship := coins[inputCoinName].Relationships[outputCoinName]
+		rate = decimal.NewFromFloat(1).Div(relationship.Ask)
 	}
-	fmt.Printf("%v:\n\tmarket : %v\n\tquantity : %v\n\trate : %v\n", transferType, market, quantity, rate)
-}
 
-func transferBittrex(inputCoin string, outputCoin string) {
-
+	fmt.Printf("%v : \n\tin: %v \n\tout: %v \n\ttype: %v \n\tquantity: %v \n\trate: %v\n", market, inputCoinName, outputCoinName, limitType, quantity, rate)
 }
 
 /* ****************************************************************************************
@@ -456,35 +417,8 @@ func convert(inputName string, outputName string, inputQuantity decimal.Decimal)
 		outputBid = withTransaction.Mul(decimal.NewFromFloat(1).Div(coins[outputName].Relationships[inputName].Bid))
 		outputLast = withTransaction.Mul(decimal.NewFromFloat(1).Div(coins[outputName].Relationships[inputName].Last))
 	} else {
-		//fmt.Printf("Unable to conver %v -> %v\n", inputName, outputName)
 		outputConvertable = false
 	}
-	/*
-		if inputIsParentCoin && !outputIsParentCoin {
-			switch inputCoinName {
-			case "BTC":
-				output = applyTransactionFee(decimal.NewFromFloat(1)).Div(childCoins[outputCoinName].Btc)
-			case "ETH":
-				output = applyTransactionFee(decimal.NewFromFloat(1)).Div(childCoins[outputCoinName].Eth)
-			}
-		} else if inputIsParentCoin && outputIsParentCoin {
-			switch outputCoinName {
-			case "BTC":
-				output = applyTransactionFee(decimal.NewFromFloat(1)).Mul(parentCoins[inputCoinName].Btc)
-			case "ETH":
-				output = applyTransactionFee(decimal.NewFromFloat(1)).Mul(parentCoins[inputCoinName].Eth)
-			case "USDT":
-				output = applyTransactionFee(decimal.NewFromFloat(1)).Mul(parentCoins[inputCoinName].Usdt)
-			}
-		} else if !inputIsParentCoin && outputIsParentCoin {
-			switch outputCoinName {
-			case "BTC":
-				output = applyTransactionFee(childCoins[inputCoinName].Btc)
-			case "ETH":
-				output = applyTransactionFee(childCoins[inputCoinName].Eth)
-			}
-		}*/
-
 	return outputAsk, outputBid, outputLast, outputConvertable
 }
 
@@ -498,7 +432,6 @@ func applyTransactionFee(input decimal.Decimal) decimal.Decimal {
 
 func main() {
 	summaries = make(map[string]map[string][]summary)
-	//var parentCoinNames = [...]string{"BTC", "ETH", "USDT"}
 	bittrexThreshhold := time.Duration(10) * time.Second
 	var bittrexKey, coinbaseKey, bittrexSecret string
 	fmt.Printf("chaingang running\n")
@@ -530,6 +463,9 @@ func main() {
 				createSummaries(bittrexClient)
 				sortSummaries()
 				printSummaries()
+				transfer("BTC", "ADA", decimal.NewFromFloat(1))
+				transfer("ADA", "ETH", decimal.NewFromFloat(1))
+				transfer("ETH", "BTC", decimal.NewFromFloat(1))
 
 				acctBalance.printBalances()
 			}()
@@ -540,7 +476,6 @@ func main() {
 			}
 			time.Sleep(bittrexThreshhold)
 		}
-
 	} else {
 		fmt.Println("please provide bittrex key and secret")
 	}
