@@ -74,6 +74,7 @@ type summary struct {
 */
 // Global Variables
 var (
+	live        = false
 	acctBalance = &balances{
 		lock:     sync.RWMutex{},
 		balances: make(map[string]decimal.Decimal),
@@ -445,6 +446,8 @@ func main() {
 			coinbaseKey = os.Args[i+1]
 		case "-s":
 			bittrexSecret = os.Args[i+1]
+		case "-l":
+			live = true
 		default:
 			panic("unrecognized argument")
 		}
@@ -465,11 +468,13 @@ func main() {
 				createSummaries(bittrexClient)
 				sortSummaries()
 				printSummaries()
-				round1 := transfer("BTC", "ADA", decimal.NewFromFloat(100))
-				round2 := transfer("ADA", "ETH", round1)
-				round3 := transfer("ETH", "BTC", round2)
-
-				fmt.Printf("end : %v", round3)
+				if live {
+					fmt.Printf("Do live trade")
+					round1 := transfer("BTC", "ADA", decimal.NewFromFloat(100))
+					round2 := transfer("ADA", "ETH", round1)
+					round3 := transfer("ETH", "BTC", round2)
+					fmt.Printf("end : %v", round3)
+				}
 
 				acctBalance.printBalances()
 			}()
