@@ -266,7 +266,9 @@ func orderedByGains() []string {
 		bSplit := strings.Split(output[bIndex], "-")
 		a := summaries[aSplit[0]][aSplit[1]]
 		b := summaries[bSplit[0]][bSplit[1]]
-		return (b[len(b)-1].Gain).GreaterThan(a[len(a)-1].Gain)
+		_, _, aLast, _ := convert(aSplit[0], "USDT", a[len(a)-1].Gain)
+		_, _, bLast, _ := convert(bSplit[0], "USDT", b[len(b)-1].Gain)
+		return (bLast).GreaterThan(aLast)
 	})
 	return output
 }
@@ -469,11 +471,13 @@ func main() {
 				sortSummaries()
 				printSummaries()
 				if live {
-					fmt.Printf("Do live trade")
-					round1 := transfer("BTC", "ADA", decimal.NewFromFloat(100))
+					fmt.Printf("Do live trade\n")
+					round1 := transfer("BTC", "ADA", validOrigins[exchangeName]["BTC"])
+					fmt.Printf("end : %v\n", round1)
 					round2 := transfer("ADA", "ETH", round1)
+					fmt.Printf("end : %v\n", round2)
 					round3 := transfer("ETH", "BTC", round2)
-					fmt.Printf("end : %v", round3)
+					fmt.Printf("end : %v\n", round3)
 				}
 
 				acctBalance.printBalances()
