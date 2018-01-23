@@ -99,6 +99,7 @@ var (
 	}
 	exchangeName = "Bittrex"
 	summaries    map[string]map[string][]summary
+	details      = false
 )
 
 /* ******************************************************************
@@ -288,18 +289,32 @@ func printSummaries() {
 		}
 
 	}
-	//for marketName := range summaries {
-	//	for otherMarketName := range summaries[marketName] {
-	//		if marketName != otherMarketName && marketName != "USDT" {
-	//			//				directAsk, _, _, _ := convert(marketName, otherMarketName, decimal.NewFromFloat(1))
-	//			fmt.Printf("Market : %v at 1.00 \n", marketName)
-	//			for _, summaryValue := range summaries[marketName][otherMarketName] {
-	//				_, _, last, _ := convert(otherMarketName, "USDT", summaryValue.Gain)
-	//				fmt.Printf("\tIndirect %v -> %v -> %v -> %v : %v\n\t\tGain : %v\n\t\tIn USDT : %v\n", marketName, summaryValue.Vessel, otherMarketName, marketName, summaryValue.Indirect, summaryValue.Gain, last)
-	//			}
-	//		}
-	//	}
-	//}
+}
+
+func makeBestTrade(offset int) {
+	ordered := orderedByGains()
+	bestMarketRelationship := ordered[len(ordered)-(1+offset)]
+	marketRelationSplit := strings.Split(bestMarketRelationship, "-")
+	originName := marketRelationSplit[0]
+	otherOriginName := marketRelationSplit[1]
+	if originName != otherOriginName {
+		summaryValue := summaries[originName][otherOriginName][len(summaries[originName][otherOriginName])-1]
+		if live {
+			executeIndirectRoute(originName, summaryValue.Vessel, otherOriginName)
+		}
+	}
+}
+
+func executeIndirectRoute(origin string, vessel string, outputOrigin string) {
+	if live {
+		fmt.Printf("Do live trade\n")
+		round1 := transfer(origin, vessel, validOrigins[exchangeName][origin])
+		fmt.Printf("end : %v\n", round1)
+		round2 := transfer(vessel, outputOrigin, round1)
+		fmt.Printf("end : %v\n", round2)
+		round3 := transfer(outputOrigin, origin, round2)
+		fmt.Printf("end : %v\n", round3)
+	}
 }
 
 /* ************************************************************************************************
@@ -450,6 +465,8 @@ func main() {
 			bittrexSecret = os.Args[i+1]
 		case "-l":
 			live = true
+		case "--details":
+			details = true
 		default:
 			panic("unrecognized argument")
 		}
@@ -470,15 +487,7 @@ func main() {
 				createSummaries(bittrexClient)
 				sortSummaries()
 				printSummaries()
-				if live {
-					fmt.Printf("Do live trade\n")
-					round1 := transfer("BTC", "ADA", validOrigins[exchangeName]["BTC"])
-					fmt.Printf("end : %v\n", round1)
-					round2 := transfer("ADA", "ETH", round1)
-					fmt.Printf("end : %v\n", round2)
-					round3 := transfer("ETH", "BTC", round2)
-					fmt.Printf("end : %v\n", round3)
-				}
+				makeBestTrade(0)
 
 				acctBalance.printBalances()
 			}()
