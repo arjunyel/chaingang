@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"os"
 	"sort"
@@ -453,28 +454,15 @@ func applyTransactionFee(input decimal.Decimal) decimal.Decimal {
 func main() {
 	summaries = make(map[string]map[string][]summary)
 	bittrexThreshhold := time.Duration(10) * time.Second
-	var bittrexKey, coinbaseKey, bittrexSecret string
 	fmt.Printf("chaingang running\n")
-	for i := 1; i < len(os.Args); i += 2 {
-		switch os.Args[i] {
-		case "-b":
-			bittrexKey = os.Args[i+1]
-		case "-c":
-			coinbaseKey = os.Args[i+1]
-		case "-s":
-			bittrexSecret = os.Args[i+1]
-		case "-l":
-			live = true
-		case "--details":
-			details = true
-		default:
-			panic("unrecognized argument")
-		}
-	}
+
+	live = *flag.Bool("l", false, "Live")
+	details = *flag.Bool("details", false, "Details")
+	bittrexKey := os.Getenv("BITTREXKEY")
+	bittrexSecret := os.Getenv("BITTREXSECRET")
 
 	fmt.Printf("\tbittrexKey: %v\n", bittrexKey)
 	fmt.Printf("\tbittrexSecret: %v\n", bittrexSecret)
-	fmt.Printf("\tcoinbaseKey: %v\n", coinbaseKey)
 
 	if bittrexKey != "" && bittrexSecret != "" {
 		bittrexClient := bittrex.New(bittrexKey, bittrexSecret)

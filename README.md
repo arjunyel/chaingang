@@ -2,7 +2,23 @@
 
 ## Example Usage
 
+Install [Go Dep](https://github.com/golang/dep)
+
+Create an "env.list" file with the Bittrex keys:
+
 ```bash
-dep ensure
-go run chaingang.go -b bittrexKey -s bittrexSecret
+BITTREXKEY=
+BITTREXSECRET=
+```
+
+Verify dependencies
+
+```bash
+dep ensure -update
+```
+
+Run app
+
+```bash
+docker run --env-file ./env.list chaingang:latest
 ```
