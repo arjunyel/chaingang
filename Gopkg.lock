@@ -8,10 +8,10 @@
   version = "v1.2.0"
 
 [[projects]]
-  branch = "master"
   name = "github.com/shopspring/decimal"
   packages = ["."]
   revision = "9ca7f51822d222ae4e246f070f9aad863599bd1a"
+  version = "1.0.0"
 
 [[projects]]
   branch = "master"
@@ -23,7 +23,7 @@
   branch = "master"
   name = "github.com/toorop/go-bittrex"
   packages = ["."]
-  revision = "8010de6d169057bcadead25db813697ef42ba1c8"
+  revision = "7dfe1b321c3fca935c2d81b9e27e81edd6655ec9"
 
 [solve-meta]
   analyzer-name = "dep"
