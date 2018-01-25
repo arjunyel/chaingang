@@ -24,3 +24,9 @@ docker build -t chaingang:latest .
 
 docker run --env-file ./env.list chaingang:latest
 ```
+
+Occasionally cleanup docker build
+
+```bash
+docker rmi $(docker images -qa -f "dangling=true")
+```
