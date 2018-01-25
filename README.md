@@ -20,5 +20,7 @@ dep ensure -update
 Run app
 
 ```bash
+docker build -t chaingang:latest .
+
 docker run --env-file ./env.list chaingang:latest
 ```
