@@ -75,7 +75,7 @@ type summary struct {
 */
 // Global Variables
 var (
-	live        = false
+	live        = *flag.Bool("l", false, "Live")
 	acctBalance = &balances{
 		lock:     sync.RWMutex{},
 		balances: make(map[string]decimal.Decimal),
@@ -100,7 +100,7 @@ var (
 	}
 	exchangeName = "Bittrex"
 	summaries    map[string]map[string][]summary
-	details      = false
+	details      = *flag.Bool("details", false, "Details")
 )
 
 /* ******************************************************************
@@ -456,10 +456,10 @@ func main() {
 	bittrexThreshhold := time.Duration(10) * time.Second
 	fmt.Printf("chaingang running\n")
 
-	live = *flag.Bool("l", false, "Live")
-	details = *flag.Bool("details", false, "Details")
 	bittrexKey := os.Getenv("BITTREXKEY")
 	bittrexSecret := os.Getenv("BITTREXSECRET")
+
+	flag.Parse()
 
 	fmt.Printf("\tbittrexKey: %v\n", bittrexKey)
 	fmt.Printf("\tbittrexSecret: %v\n", bittrexSecret)
