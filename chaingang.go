@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/shopspring/decimal"
-	bittrex "github.com/toorop/go-bittrex"
+	"github.com/toorop/go-bittrex"
 )
 
 type balances struct {
@@ -75,24 +75,25 @@ type summary struct {
 */
 // Global Variables
 var (
-	live        = *flag.Bool("l", false, "Live")
 	acctBalance = &balances{
 		lock:     sync.RWMutex{},
 		balances: make(map[string]decimal.Decimal),
 	}
+	bittrexClient  *bittrex.Bittrex
+	live           = *flag.Bool("l", false, "Live")
 	transactionFee = decimal.NewFromFloat(.0025)
 	parentCoins    = map[string]*parentCoin{}
 	childCoins     = map[string]*childCoin{}
 	coins          = map[string]*Coin{}
 	validOrigins   = map[string]map[string]decimal.Decimal{
-		"Bittrex": map[string]decimal.Decimal{
+		"Bittrex": {
 			"BTC":  decimal.NewFromFloat(0.0072),
 			"ETH":  decimal.NewFromFloat(0.072),
 			"USDT": decimal.NewFromFloat(100),
 		},
 	}
 	validMarkets = map[string]map[string]bool{
-		"Bittrex": map[string]bool{
+		"Bittrex": {
 			"BTC-ETH":  true,
 			"USDT-BTC": true,
 			"USDT-ETH": true,
@@ -424,7 +425,7 @@ func convert(inputName string, outputName string, inputQuantity decimal.Decimal)
 	outputAsk := decimal.NewFromFloat(0)
 	outputBid := decimal.NewFromFloat(0)
 	outputLast := decimal.NewFromFloat(0)
-	outputConvertable := true
+	outputConvertible := true
 	_, coinHasRelationship := coins[inputName].Relationships[outputName]
 	_, coinHasRelationshipReverse := coins[outputName].Relationships[inputName]
 	if coinHasRelationship {
@@ -438,9 +439,9 @@ func convert(inputName string, outputName string, inputQuantity decimal.Decimal)
 		outputBid = withTransaction.Mul(decimal.NewFromFloat(1).Div(coins[outputName].Relationships[inputName].Bid))
 		outputLast = withTransaction.Mul(decimal.NewFromFloat(1).Div(coins[outputName].Relationships[inputName].Last))
 	} else {
-		outputConvertable = false
+		outputConvertible = false
 	}
-	return outputAsk, outputBid, outputLast, outputConvertable
+	return outputAsk, outputBid, outputLast, outputConvertible
 }
 
 func getMarketName(pre, post string) string {
@@ -448,12 +449,12 @@ func getMarketName(pre, post string) string {
 }
 
 func applyTransactionFee(input decimal.Decimal) decimal.Decimal {
-	return input.Add((input.Mul(transactionFee).Neg()))
+	return input.Add(input.Mul(transactionFee).Neg())
 }
 
 func main() {
 	summaries = make(map[string]map[string][]summary)
-	bittrexThreshhold := time.Duration(10) * time.Second
+	bittrexThreshold := time.Duration(10) * time.Second
 	fmt.Printf("chaingang running\n")
 
 	bittrexKey := os.Getenv("BITTREXKEY")
@@ -465,7 +466,7 @@ func main() {
 	fmt.Printf("\tbittrexSecret: %v\n", bittrexSecret)
 
 	if bittrexKey != "" && bittrexSecret != "" {
-		bittrexClient := bittrex.New(bittrexKey, bittrexSecret)
+		bittrexClient = bittrex.New(bittrexKey, bittrexSecret)
 
 		for {
 			marketSummaries, err := updateMarketSummaries(bittrexClient)
@@ -484,7 +485,7 @@ func main() {
 			} else {
 				fmt.Println(err)
 			}
-			time.Sleep(bittrexThreshhold)
+			time.Sleep(bittrexThreshold)
 		}
 	} else {
 		fmt.Println("please provide bittrex key and secret")
