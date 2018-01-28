@@ -1,7 +1,7 @@
 package main
 
 import (
-	"flag"
+	//"flag"
 	"fmt"
 	"os"
 	"sort"
@@ -79,17 +79,18 @@ var (
 		lock:     sync.RWMutex{},
 		balances: make(map[string]decimal.Decimal),
 	}
-	bittrexClient  *bittrex.Bittrex
-	live           = *flag.Bool("l", false, "Live")
+	bittrexClient *bittrex.Bittrex
+	//live           = *flag.Bool("l", false, "Live")
+	live           = false
 	transactionFee = decimal.NewFromFloat(.0025)
 	parentCoins    = map[string]*parentCoin{}
 	childCoins     = map[string]*childCoin{}
 	coins          = map[string]*Coin{}
 	validOrigins   = map[string]map[string]decimal.Decimal{
 		"Bittrex": {
-			"BTC":  decimal.NewFromFloat(0.0072),
-			"ETH":  decimal.NewFromFloat(0.072),
-			"USDT": decimal.NewFromFloat(100),
+			"BTC":  decimal.NewFromFloat(0.0050),
+			"ETH":  decimal.NewFromFloat(0.005),
+			"USDT": decimal.NewFromFloat(5),
 		},
 	}
 	validMarkets = map[string]map[string]bool{
@@ -101,7 +102,8 @@ var (
 	}
 	exchangeName = "Bittrex"
 	summaries    map[string]map[string][]summary
-	details      = *flag.Bool("details", false, "Details")
+	details      = false
+	//details      = *flag.Bool("details", false, "Details")
 )
 
 /* ******************************************************************
@@ -218,18 +220,27 @@ func createSummaries(bittrexClient *bittrex.Bittrex) {
 						directAsk, _, _, _ := convert(originName, otherOriginName, originStake)
 						//	fmt.Printf("Direct Ask %v -> %v : %v\n", marketName, otherMarketName, directAsk)
 						for coinName := range coins {
-							_, marketToCoinBid, _, marketToCoinConvertable := convert(originName, coinName, originStake)
-							coinToOtherAsk, _, _, coinToOtherConvertable := convert(coinName, otherOriginName, marketToCoinBid)
-							_, otherToMarketBid, _, otherToMarketConvertable := convert(otherOriginName, originName, coinToOtherAsk)
-							if marketToCoinConvertable && coinToOtherConvertable && otherToMarketConvertable {
+							marketToCoinAsk, _, _, marketToCoinConvertable := convert(originName, coinName, originStake)
+							_, coinToOtherBid, _, coinToOtherConvertable := convert(coinName, otherOriginName, marketToCoinAsk)
+
+							_, finalMarketIsValid := validMarkets[exchangeName][otherOriginName+"-"+originName]
+							finalVal := decimal.NewFromFloat(0)
+							otherToMarketConvertable := false
+							if finalMarketIsValid {
+								finalVal, _, _, otherToMarketConvertable = convert(otherOriginName, originName, coinToOtherBid)
+							} else {
+								_, finalVal, _, otherToMarketConvertable = convert(otherOriginName, originName, coinToOtherBid)
+							}
+
+							if marketToCoinConvertable && coinToOtherConvertable && otherToMarketConvertable && finalVal.GreaterThan(decimal.NewFromFloat(0)) {
 								summaries[originName][otherOriginName] = append(summaries[originName][otherOriginName], summary{
 									Quantity:   originStake,
 									InputCoin:  originName,
 									OutputCoin: otherOriginName,
 									Vessel:     coinName,
 									Direct:     directAsk,
-									Indirect:   otherToMarketBid,
-									Gain:       otherToMarketBid.Add(originStake.Neg()),
+									Indirect:   finalVal,
+									Gain:       finalVal.Add(originStake.Neg()),
 								})
 							}
 
@@ -293,7 +304,7 @@ func printSummaries() {
 	}
 }
 
-func makeBestTrade(offset int) {
+func makeBestTrade(offset int, bittrexClient *bittrex.Bittrex) {
 	ordered := orderedByGains()
 	bestMarketRelationship := ordered[len(ordered)-(1+offset)]
 	marketRelationSplit := strings.Split(bestMarketRelationship, "-")
@@ -301,47 +312,130 @@ func makeBestTrade(offset int) {
 	otherOriginName := marketRelationSplit[1]
 	if originName != otherOriginName {
 		summaryValue := summaries[originName][otherOriginName][len(summaries[originName][otherOriginName])-1]
+		fmt.Printf("%v\n", summaryValue)
 		if live {
-			executeIndirectRoute(originName, summaryValue.Vessel, otherOriginName)
+
+			//executeIndirectRoute(originName, summaryValue.Vessel, otherOriginName, bittrexClient)
+			executeIndirectRoute("BTC", "ADA", "ETH", bittrexClient) //TODO put me back
+
 		}
 	}
 }
 
-func executeIndirectRoute(origin string, vessel string, outputOrigin string) {
+func executeIndirectRoute(origin string, vessel string, outputOrigin string, bittrexClient *bittrex.Bittrex) {
 	if live {
-		fmt.Printf("Do live trade\n")
-		round1 := transfer(origin, vessel, validOrigins[exchangeName][origin])
-		fmt.Printf("end : %v\n", round1)
-		round2 := transfer(vessel, outputOrigin, round1)
-		fmt.Printf("end : %v\n", round2)
-		round3 := transfer(outputOrigin, origin, round2)
-		fmt.Printf("end : %v\n", round3)
+		var rate decimal.Decimal
+		relationship, relationshipExists := coins[vessel].Relationships[origin]
+		if relationshipExists {
+			_, inputValidOrigin := validOrigins[exchangeName][origin]
+			_, outputValidOrigin := validOrigins[exchangeName][vessel]
+			_, isValidBuyMarket := validMarkets[exchangeName][origin+"-"+vessel]
+			if !relationshipExists || (inputValidOrigin && outputValidOrigin && !isValidBuyMarket) {
+				rate = decimal.NewFromFloat(1).Div(relationship.Bid)
+			} else {
+				rate = relationship.Ask
+			}
+			originLimit, isValid := validOrigins[exchangeName][origin]
+			if isValid {
+				quantity := originLimit.Div(rate)
+				fmt.Printf("Do live trade\n")
+				round1 := transfer(origin, vessel, quantity, bittrexClient)
+				fmt.Printf("end : %v\n", round1)
+				round2 := transfer(vessel, outputOrigin, round1, bittrexClient)
+				fmt.Printf("end : %v\n", round2)
+				round3 := transfer(outputOrigin, origin, round2, bittrexClient)
+				fmt.Printf("end : %v\n", round3)
+			}
+		}
 	}
+}
+
+func printOrder2(order2 bittrex.Order2) {
+	fmt.Printf("AccountId: %v\nOrderUuid: %v\nExchange: %v\nType: %v\nQuantity: %v\nQuantityRemaining: %v\nLimit: %v\nReserved: %v\nReserveRemaining: %v\nCommissionReserve: %v\nCommissionReserveRemaining: %v\nCommissionPaid: %v\nPrice: %v\nPricePerUnit: %v \nOpened: %v\nClosed: %v\nIsOpen: %v\nSentinel: %v\nCancelInitiated: %v\nImmideateOrCancel: %v\nIsConditional: %v\nCondition: %v\nConditionTarget: %v\n", order2.AccountId, order2.OrderUuid, order2.Exchange, order2.Type, order2.Quantity, order2.QuantityRemaining, order2.Limit, order2.Reserved, order2.ReserveRemaining, order2.CommissionReserved, order2.CommissionReserveRemaining, order2.CommissionPaid, order2.Price, order2.PricePerUnit, order2.Opened, order2.Closed, order2.IsOpen, order2.Sentinel, order2.CancelInitiated, order2.ImmediateOrCancel, order2.IsConditional, order2.Condition, order2.ConditionTarget)
 }
 
 /* ************************************************************************************************
  * Trading
  * ***********************************************************************************************/
 
-func transfer(inputCoinName string, outputCoinName string, quantity decimal.Decimal) decimal.Decimal {
+func transfer(inputCoinName string, outputCoinName string, quantity decimal.Decimal, bittrexClient *bittrex.Bittrex) decimal.Decimal {
 	var limitType string
 	var market string
 	var rate decimal.Decimal
 	var output decimal.Decimal
 	relationship, relationshipExists := coins[outputCoinName].Relationships[inputCoinName]
 
-	if relationshipExists {
-		market = inputCoinName + "-" + outputCoinName
-		limitType = "buy"
-		rate = relationship.Bid
-	} else {
+	_, inputValidOrigin := validOrigins[exchangeName][inputCoinName]
+	_, outputValidOrigin := validOrigins[exchangeName][outputCoinName]
+	_, isValidBuyMarket := validMarkets[exchangeName][inputCoinName+"-"+outputCoinName]
+
+	if !relationshipExists || (inputValidOrigin && outputValidOrigin && !isValidBuyMarket) {
 		market = outputCoinName + "-" + inputCoinName
 		limitType = "sell"
 		relationship := coins[inputCoinName].Relationships[outputCoinName]
-		rate = decimal.NewFromFloat(1).Div(relationship.Ask)
+		rate = decimal.NewFromFloat(1).Div(relationship.Bid)
+	} else {
+
+		market = inputCoinName + "-" + outputCoinName
+		limitType = "buy"
+		rate = relationship.Ask
 	}
-	output = quantity.Div(rate)
-	fmt.Printf("%v : \n\tin: %v \n\tout: %v \n\ttype: %v \n\tquantity: %v \n\trate: %v\n", market, inputCoinName, outputCoinName, limitType, quantity, rate)
+
+	//but limit
+	if live {
+		fmt.Printf("Putting in Order\n")
+		var orderId string = ""
+		var err error = nil
+
+		fmt.Printf("market : %v\nquantity : %v\nrate : %v\n", market, quantity, rate)
+		if limitType == "buy" {
+			//orderId, err = bittrexClient.BuyLimit(market, quantity, rate)
+		} else {
+			//orderId, err = bittrexClient.SellLimit(market, quantity, rate)
+		}
+
+		fmt.Printf("orderId : " + orderId)
+		if err == nil && orderId != "" {
+			var order bittrex.Order2
+			var err2 error = nil
+			count := 0
+			isOpen := true
+			for count < 3 && isOpen {
+				order, err2 = bittrexClient.GetOrder(orderId)
+				if err2 == nil {
+					printOrder2(order)
+				} else {
+					fmt.Println(err2)
+				}
+				count = count + 1
+				if !isOpen {
+					output = order.Quantity
+				}
+				if count != 2 {
+					time.Sleep(time.Duration(5) * time.Second)
+				}
+
+			}
+			if isOpen {
+				fmt.Println("Could not make trade. Canceling order")
+				output = order.Quantity.Add(order.QuantityRemaining.Neg())
+				err3 := bittrexClient.CancelOrder(orderId)
+				if err3 == nil {
+					fmt.Printf("Order %v Canceled Successfully\n", orderId)
+				} else {
+					fmt.Printf("Could not cancel order %v\n", orderId)
+				}
+			} else {
+				output = order.Quantity
+			}
+
+		} else {
+			fmt.Println(err)
+			//panic("Error") //TODO put me back in
+		}
+	}
+	output = quantity //TODO take me out
+	fmt.Printf("%v : \n\tin: %v \n\tout: %v \n\ttype: %v \n\tquantity: %v \n\trate: %v\n", market, inputCoinName, outputCoinName, limitType, output, rate)
 	return output
 }
 
@@ -454,13 +548,32 @@ func applyTransactionFee(input decimal.Decimal) decimal.Decimal {
 
 func main() {
 	summaries = make(map[string]map[string][]summary)
-	bittrexThreshold := time.Duration(10) * time.Second
+	bittrexThreshold := time.Duration(440) * time.Second
 	fmt.Printf("chaingang running\n")
 
 	bittrexKey := os.Getenv("BITTREXKEY")
 	bittrexSecret := os.Getenv("BITTREXSECRET")
 
-	flag.Parse()
+	//flag.Parse()
+
+	for i := 1; i < len(os.Args); i += 2 {
+		switch os.Args[i] {
+		case "-b":
+			if bittrexKey == "" {
+				bittrexKey = os.Args[i+1]
+			}
+		case "-s":
+			if bittrexSecret == "" {
+				bittrexSecret = os.Args[i+1]
+			}
+		case "-l":
+			live = true
+		case "--details":
+			details = true
+		default:
+			panic("unrecognized argument")
+		}
+	}
 
 	fmt.Printf("\tbittrexKey: %v\n", bittrexKey)
 	fmt.Printf("\tbittrexSecret: %v\n", bittrexSecret)
@@ -476,7 +589,7 @@ func main() {
 				createSummaries(bittrexClient)
 				sortSummaries()
 				printSummaries()
-				makeBestTrade(0)
+				makeBestTrade(0, bittrexClient)
 
 				acctBalance.printBalances()
 			}()
